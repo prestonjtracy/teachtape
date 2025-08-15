@@ -1,0 +1,10 @@
+:root { --fg: #111; --bg: #fff; --muted: #666; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--fg); }
+a { color: inherit; text-decoration: none; }
+.container { max-width: 1040px; margin: 0 auto; padding: 2rem; }
+.nav { display: flex; align-items: center; justify-content: space-between; padding: 1rem 0; }
+.btn { display: inline-flex; align-items: center; gap: .5rem; padding: .6rem 1rem; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.card { border: 1px solid #eee; border-radius: 10px; padding: 1rem; }
+.footer { margin-top: 3rem; border-top: 1px solid #eee; padding: 2rem 0; color: var(--muted); font-size: .9rem; }
