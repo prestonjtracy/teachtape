@@ -1,19 +1,5 @@
-.container {
-  padding: 2rem;
-}
-
-.grid {
-  display: grid;
-  gap: 1.5rem;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-}
-
-.card {
-  background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  padding: 1rem;
-  text-align: center;
+display: block;
+cursor: pointer;
 }
 
 .avatar {
@@ -45,26 +31,4 @@
 .role {
   color: #666;
   font-size: 0.875rem;
-  margin-bottom: 0.5rem;
-}
-
-.link {
-  font-size: 0.875rem;
-  color: #0070f3;
-  text-decoration: none;
-}
-
-.link:hover {
-  text-decoration: underline;
-}
-
-.emptyState {
-  text-align: center;
-  padding: 2rem;
-  color: #666;
-}
-
-.profileHeader {
-  text-align: center;
-  margin-bottom: 2rem;
 }
