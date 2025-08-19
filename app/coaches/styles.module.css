@@ -1,7 +1,3 @@
-display: block;
-cursor: pointer;
-}
-
 .avatar {
   width: 64px;
   height: 64px;
@@ -27,7 +23,6 @@ cursor: pointer;
   font-weight: 600;
   margin-bottom: 0.25rem;
 }
-
 .role {
   color: #666;
   font-size: 0.875rem;

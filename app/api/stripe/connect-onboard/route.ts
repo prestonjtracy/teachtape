@@ -26,10 +26,12 @@ export async function POST() {
   // Retrieve and verify the application base URL used for redirects.
   const appUrl = process.env.APP_URL;
   if (!appUrl) {
-    return new Response(JSON.stringify({ error: "Missing APP_URL" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+ return new Response(JSON.stringify({ error: "Missing APP_URL" }), {
+  status: 500,
+  headers: { "Content-Type": "application/json" },
+});
+
+
   }
 
   // Ensure APP_URL is a valid absolute URL before using it.
@@ -51,8 +53,6 @@ export async function POST() {
 
   // Persist the new account ID in Supabase if possible.
   try {
-    const supabase = adminClient();
-    await supabase
       .from("stripe_accounts")
       .insert({ account_id: account.id });
   } catch (error) {

@@ -29,5 +29,4 @@ export async function POST(req: NextRequest) {
 
   return new Response(JSON.stringify({ received: true }), { status: 200 });
 }
-
-export const config = { api: { bodyParser: false } } as any;
+export const dynamic = "force-dynamic";
