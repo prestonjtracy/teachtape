@@ -1,4 +1,4 @@
-import supabase from "@/supabase/client";
+import supabase from "@supabase/client";
 import styles from "../styles.module.css";
 
 interface Profile {
@@ -7,8 +7,22 @@ interface Profile {
   avatar_url: string | null;
 }
 
+interface Listing {
+  id: string;
+  title: string;
+  price_cents: number;
+  duration_minutes: number;
+}
+
 function getInitials(name: string | null) {
   if (!name) return "?";
+  return name
+    .split(/\s+/)
+    .map((n) => n[0])
+    .filter(Boolean)
+    .join("")
+    .toUpperCase();
+}
   return name
     .split(/\s+/)
     .map((n) => n[0])
@@ -23,29 +37,6 @@ export default async function CoachPage({
   params: { id: string };
 }) {
   try {
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("full_name, role, avatar_url")
-      .eq("id", params.id)
-      .maybeSingle();
-
-    if (error) {
-      console.error("Error loading coach profile:", error);
-      return (
-        <main className={styles.container}>
-          <div className={styles.emptyState}>Failed to load coach.</div>
-        </main>
-      );
-    }
-
-    if (!profile) {
-      return (
-        <main className={styles.container}>
-          <div className={styles.emptyState}>Coach not found.</div>
-        </main>
-      );
-    }
-
     return (
       <main className={styles.container}>
         <div className={styles.profileHeader}>
@@ -60,14 +51,52 @@ export default async function CoachPage({
           <div className={styles.name}>{profile.full_name ?? "Unnamed"}</div>
           <div className={styles.role}>{profile.role ?? ""}</div>
         </div>
-        <section>
-          <h2>Listings</h2>
-          <div className={styles.emptyState}>No listings yet.</div>
-        </section>
-      </main>
-    );
-  } catch (err) {
-    console.error("Unexpected error loading coach profile:", err);
+const { 
+  data: listingsData, 
+  error: listingsError 
+} = await supabase
+  .from("listings")
+  .select("id, title, price_cents, duration_minutes")
+  .eq("coach_id", params.id);
+
+if (listingsError) throw listingsError;
+
+const listings: Listing[] = listingsData ?? [];
+
+const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+return (
+  <main className={styles.container}>
+    <div className={styles.profileHeader}>
+      <div className={styles.avatar}>
+        {profile.avatar_url ? (
+          <img src={profile.avatar_url} alt={profile.full_name ?? "Coach"} />
+        ) : (
+          getInitials(profile.full_name)
+        )}
+      </div>
+      <div className={styles.name}>{profile.full_name ?? "Unnamed"}</div>
+      <div className={styles.role}>{profile.role ?? ""}</div>
+    </div>
+
+    <section>
+      <h2>Listings</h2>
+      {listings.length > 0 ? (
+        <ul>
+          {listings.map((listing) => (
+            <li key={listing.id}>
+              {listing.title} — {formatPrice(listing.price_cents)} for{" "}
+              {listing.duration_minutes} minutes
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className={styles.emptyState}>No listings yet.</div>
+      )}
+    </section>
+  </main>
+);
+
     return (
       <main className={styles.container}>
         <div className={styles.emptyState}>Failed to load coach.</div>
@@ -75,4 +104,3 @@ export default async function CoachPage({
     );
   }
 }
-
