@@ -5,8 +5,7 @@
  * environment and must only be run on the server (never in the browser).
  */
 import { randomUUID } from "crypto";
-import { adminClient } from "@/supabase/client";
-
+import { adminClient as supabase } from "../supabase/client";
 const coaches = [
   { full_name: "Alex Carter", avatar_url: "https://i.pravatar.cc/150?img=11" },
   { full_name: "Jamie Brooks", avatar_url: "https://i.pravatar.cc/150?img=32" },
@@ -14,8 +13,6 @@ const coaches = [
 ];
 
 async function seed() {
-  const supabase = adminClient;
-
   for (const coach of coaches) {
     const { data: existing, error: fetchError } = await supabase
       .from("profiles")

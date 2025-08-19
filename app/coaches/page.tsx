@@ -1,14 +1,11 @@
-import { anonClient as supabase } from "@/supabase/client";
-import Link from "next/link";
+import supabase from "@/supabase/client";
 import styles from "./styles.module.css";
-
 interface Profile {
   id: string;
   full_name: string | null;
   role: string | null;
   avatar_url: string | null;
 }
-
 function getInitials(name: string | null) {
   if (!name) return "?";
   return name
@@ -18,7 +15,6 @@ function getInitials(name: string | null) {
     .join("")
     .toUpperCase();
 }
-
 export default async function CoachesPage() {
   try {
     const { data: profiles, error } = await supabase
@@ -36,17 +32,11 @@ export default async function CoachesPage() {
         </main>
       );
     }
-
     return (
       <main className={styles.container}>
         <h1>Coaches</h1>
         <div className={styles.grid}>
           {profiles.map((profile: Profile) => (
-            <Link
-              key={profile.id}
-              href={`/coaches/${profile.id}`}
-              className={styles.card}
-            >
               <div className={styles.avatar}>
                 {profile.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -62,7 +52,6 @@ export default async function CoachesPage() {
                 {profile.full_name ?? "Unnamed"}
               </div>
               <div className={styles.role}>{profile.role ?? "unknown"}</div>
-            </Link>
           ))}
         </div>
       </main>
