@@ -4,16 +4,21 @@
  * Reads NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from the
  * environment and must only be run on the server (never in the browser).
  */
+
 import { randomUUID } from "crypto";
-import { adminClient as supabase } from "../supabase/client";
+import { createClient } from "@/supabase/server"; // server/admin client (uses service role key)
+
 const coaches = [
-  { full_name: "Alex Carter", avatar_url: "https://i.pravatar.cc/150?img=11" },
+  { full_name: "Alex Carter",  avatar_url: "https://i.pravatar.cc/150?img=11" },
   { full_name: "Jamie Brooks", avatar_url: "https://i.pravatar.cc/150?img=32" },
-  { full_name: "Taylor Reed", avatar_url: "https://i.pravatar.cc/150?img=7" },
+  { full_name: "Taylor Reed",  avatar_url: "https://i.pravatar.cc/150?img=7"  },
 ];
 
 async function seed() {
+  const supabase = createClient(); // ✅ use server client (service role)
+
   for (const coach of coaches) {
+    // See if a profile already exists for this name
     const { data: existing, error: fetchError } = await supabase
       .from("profiles")
       .select("id")
@@ -24,31 +29,37 @@ async function seed() {
       console.error(`Failed to check ${coach.full_name}:`, fetchError.message);
       continue;
     }
-    if (existing) {
-      console.log(`Skipping ${coach.full_name} (already exists)`);
+
+    // If already there, skip
+    if (existing?.id) {
+      console.log(`Exists: ${coach.full_name} (id: ${existing.id})`);
       continue;
     }
 
-    const { error: insertError } = await supabase.from("profiles").insert({
-      full_name: coach.full_name,
-      role: "coach",
-      avatar_url: coach.avatar_url,
-      auth_user_id: randomUUID(),
-    });
+    // Otherwise create the coach profile
+    const { data: inserted, error: insertError } = await supabase
+      .from("profiles")
+      .insert({
+        id: randomUUID(),
+        role: "coach",
+        full_name: coach.full_name,
+        avatar_url: coach.avatar_url,
+      })
+      .select("id")
+      .single();
 
     if (insertError) {
-      console.error(`Failed to insert ${coach.full_name}:`, insertError.message);
-    } else {
-      console.log(`Inserted ${coach.full_name}`);
+      console.error(`Insert failed for ${coach.full_name}:`, insertError.message);
+      continue;
     }
+
+    console.log(`Inserted: ${coach.full_name} (id: ${inserted.id})`);
   }
+
+  console.log("Seed complete.");
 }
 
-seed()
-  .then(() => {
-    console.log("Seeding complete");
-  })
-  .catch((err) => {
-    console.error("Seeding failed:", err);
-    process.exit(1);
-  });
+seed().catch((err) => {
+  console.error("Seed crashed:", err);
+  process.exit(1);
+});

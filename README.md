@@ -25,6 +25,12 @@ npm install
 npm run dev
 ```
 
+## Environment files
+
+- `.env.local` is git-ignored; create it from `.env.example`.
+- Run `npm run normalize-env` to dedupe and order keys.
+- Run `npm run check-env` to ensure required keys are set.
+
 ## Supabase
 - Paste `supabase/schema.sql` into the SQL editor (or run as a migration).
 - Turn on RLS and craft policies for each table.

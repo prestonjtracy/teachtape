@@ -1,3 +1,7 @@
+import fs from "fs";
+import path from "path";
+
+
 /**
  * Checks required environment variables for server and client contexts.
  * Run during build to fail fast if any critical vars are missing.

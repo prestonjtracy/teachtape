@@ -1,5 +1,8 @@
-import { anonClient } from "@/supabase/client";
+import { supabase } from "@/supabase/client";
 
+/**
+ * Simple helper to verify the anonymous Supabase client can read.
+ */
 export async function testSupabaseConnection() {
-  return anonClient.from("test").select("*");
+  return supabase.from("test").select("*");
 }
