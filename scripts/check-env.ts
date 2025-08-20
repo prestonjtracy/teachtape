@@ -1,38 +1,35 @@
 import fs from "fs";
 import path from "path";
 
-const examplePath = path.resolve(".env.example");
-const localPath = path.resolve(".env.local");
 
-const example = fs.readFileSync(examplePath, "utf8")
-  .split(/\r?\n/)
-  .filter((line) => line && !line.startsWith("#"))
-  .map((line) => line.split("=")[0]);
+/**
+ * Checks required environment variables for server and client contexts.
+ * Run during build to fail fast if any critical vars are missing.
+ */
 
-let missing: string[] = [];
+const required = {
+  server: [
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "APP_URL",
+  ],
+  client: [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  ],
+};
 
-if (fs.existsSync(localPath)) {
-  const envLines = fs.readFileSync(localPath, "utf8").split(/\r?\n/);
-  const env: Record<string, string> = {};
-  for (const line of envLines) {
-    if (!line || line.startsWith("#")) continue;
-    const idx = line.indexOf("=");
-    if (idx === -1) continue;
-    const key = line.slice(0, idx).trim();
-    const value = line.slice(idx + 1).trim();
-    env[key] = value;
+function assertVars(vars: string[], scope: string) {
+  const missing = vars.filter((name) => !process.env[name]);
+  if (missing.length) {
+    throw new Error(
+      `Missing ${scope} environment variables: ${missing.join(", ")}`,
+    );
   }
-  missing = example.filter((key) => !env[key]);
-  if (!missing.length) {
-    console.log("All required environment variables are present.");
-  }
-} else {
-  console.error("Missing .env.local. Create it from .env.example.");
-  missing = example;
 }
 
-if (missing.length) {
-  console.error("Missing keys:\n" + missing.join("\n"));
-  process.exit(1);
-}
-process.exit(0);
+assertVars(required.server, "server");
+assertVars(required.client, "client");
+
+console.log("All required environment variables are present.");
