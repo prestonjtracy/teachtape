@@ -25,13 +25,25 @@ npm install
 npm run dev
 ```
 
+## Environment files
+
+- `.env.local` is git-ignored; create it from `.env.example`.
+- Run `npm run normalize-env` to dedupe and order keys.
+- Run `npm run check-env` to ensure required keys are set.
+
 ## Supabase
 - Paste `supabase/schema.sql` into the SQL editor (or run as a migration).
 - Turn on RLS and craft policies for each table.
+- Run `npm run seed:coaches` locally to insert demo coach profiles. The script reads
+  `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from your environment
+  and must never run in the browser.
 
 ## Stripe
-- Forward webhooks: `stripe listen --forward-to localhost:3000/api/stripe/webhook`
-- Add your keys to `.env.local` and replace TODOs in the API routes.
+To verify Stripe webhooks locally:
+1. Add `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to `.env.local`.
+2. In one terminal run `npm run dev`.
+3. In another run `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
+4. Trigger a test with `stripe trigger checkout.session.completed`.
 
 ## Zoom
 - Configure an Event Subscription to `http://localhost:3000/api/zoom/webhook`.
@@ -39,3 +51,26 @@ npm run dev
 
 ## Email
 - Fill SMTP or Resend credentials. See `lib/email.ts` and `/api/email/send`.
+
+## Environment Variables
+
+Set the following variables in Vercel. "Preview" refers to Preview Deployments; "Production" covers the Production Deployment.
+
+| Variable | Purpose | Preview | Production |
+| --- | --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Yes | Yes |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key for browser requests | Yes | Yes |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key for server tasks | Yes | Yes |
+| `STRIPE_SECRET_KEY` | Stripe secret key for server-side API calls | Yes | Yes |
+| `STRIPE_WEBHOOK_SECRET` | Validates Stripe webhooks | Yes | Yes |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key for client-side UI | Optional | Yes |
+| `STRIPE_CONNECT_CLIENT_ID` | Connect onboarding client ID | Optional | Yes |
+| `APP_URL` | Base URL used for redirects and links | Yes | Yes |
+| `ZOOM_VERIFICATION_TOKEN` | Zoom webhook verification | Optional | Yes |
+| `ZOOM_CLIENT_ID` | Zoom OAuth client ID | Optional | Optional |
+| `ZOOM_CLIENT_SECRET` | Zoom OAuth client secret | Optional | Optional |
+| `RESEND_API_KEY` | Resend email API key | Optional | Optional |
+| `SMTP_HOST` | SMTP server host | Optional | Optional |
+| `SMTP_PORT` | SMTP port | Optional | Optional |
+| `SMTP_USER` | SMTP username | Optional | Optional |
+| `SMTP_PASS` | SMTP password | Optional | Optional |

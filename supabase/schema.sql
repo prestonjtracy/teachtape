@@ -35,16 +35,13 @@ create table if not exists availability (
 
 create table if not exists bookings (
   id uuid primary key default gen_random_uuid(),
-  listing_id uuid references listings(id) on delete set null,
-  coach_id uuid references profiles(id) on delete set null,
-  athlete_id uuid references profiles(id) on delete set null,
-  starts_at timestamptz not null,
-  ends_at timestamptz not null,
-  status text check (status in ('pending','paid','scheduled','completed','cancelled')) not null default 'pending',
-  stripe_payment_intent_id text,
-  zoom_meeting_id text,
-  zoom_join_url text,
-  created_at timestamptz default now()
+  listing_id uuid not null,
+  coach_id uuid not null,
+  customer_email text,
+  amount_paid_cents integer not null default 0,
+  status text not null default 'paid',
+  stripe_session_id text not null,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists messages (

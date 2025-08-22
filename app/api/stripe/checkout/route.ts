@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
     amount = 500,            // cents
     currency = "usd",
     coachStripeAccountId,
+    listingId,
+    coachId,
   } = body;
 
   const params: Stripe.Checkout.SessionCreateParams = {
@@ -46,6 +48,10 @@ export async function POST(req: NextRequest) {
     ],
     success_url: `${process.env.APP_URL}/dashboard?status=success&b=${encodeURIComponent(bookingId)}`,
     cancel_url: `${process.env.APP_URL}/dashboard?status=cancelled&b=${encodeURIComponent(bookingId)}`,
+    metadata: {
+      listing_id: listingId ?? "",
+      coach_id: coachId ?? "",
+    },
   };
 
   // Only include transfer (connected account) when we have a valid acct_ id
