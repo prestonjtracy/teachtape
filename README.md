@@ -39,8 +39,11 @@ npm run dev
   and must never run in the browser.
 
 ## Stripe
-- Forward webhooks: `stripe listen --forward-to localhost:3000/api/stripe/webhook`
-- Add your keys to `.env.local` and replace TODOs in the API routes.
+To verify Stripe webhooks locally:
+1. Add `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to `.env.local`.
+2. In one terminal run `npm run dev`.
+3. In another run `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
+4. Trigger a test with `stripe trigger checkout.session.completed`.
 
 ## Zoom
 - Configure an Event Subscription to `http://localhost:3000/api/zoom/webhook`.

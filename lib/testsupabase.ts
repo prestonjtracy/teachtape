@@ -1,5 +1,4 @@
 import { supabase } from "@/supabase/client";
-
 /**
  * Simple helper to verify the anonymous Supabase client can read.
  */

@@ -92,7 +92,6 @@ export default async function CoachPage({
     );
   } catch (err) {
     console.error("Error loading coach profile:", err);
-
     return (
       <main className={styles.container}>
         <div className={styles.emptyState}>Failed to load coach.</div>

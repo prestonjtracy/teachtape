@@ -4,7 +4,6 @@
  * Reads NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from the
  * environment and must only be run on the server (never in the browser).
  */
-
 import { randomUUID } from "crypto";
 import { createClient } from "@/supabase/server"; // server/admin client (uses service role key)
 

@@ -40,7 +40,6 @@ export default async function CoachesPage() {
         <h1>Coaches</h1>
         <div className={styles.grid}>
           {profiles.map((profile: Profile) => (
-
             <Link
               key={profile.id}
               href={`/coaches/${profile.id}`}
@@ -77,3 +76,4 @@ export default async function CoachesPage() {
       </main>
     );
   }
+}
