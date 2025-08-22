@@ -1,5 +1,5 @@
-import { supabase } from "@/supabase/client";
 import Link from "next/link";
+import { supabase } from "@/supabase/client";
 import styles from "./styles.module.css";
 
 interface Profile {
@@ -18,7 +18,6 @@ function getInitials(name: string | null) {
     .join("")
     .toUpperCase();
 }
-
 export default async function CoachesPage() {
   try {
     const { data: profiles, error } = await supabase
@@ -36,7 +35,6 @@ export default async function CoachesPage() {
         </main>
       );
     }
-
     return (
       <main className={styles.container}>
         <h1>Coaches</h1>
@@ -62,7 +60,9 @@ export default async function CoachesPage() {
                 {profile.full_name ?? "Unnamed"}
               </div>
               <div className={styles.role}>{profile.role ?? "unknown"}</div>
+
             </Link>
+
           ))}
         </div>
       </main>

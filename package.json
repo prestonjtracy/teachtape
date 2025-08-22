@@ -10,8 +10,9 @@
     "test": "echo \"No tests yet\" && exit 0",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "check-env": "node --env-file=.env.local scripts/check-env.ts || node scripts/check-env.ts",
-    "normalize-env": "node scripts/normalize-env.mjs",
+"check-env": "node --env-file=.env.local scripts/check-env.ts || node scripts/check-env.ts",
+"normalize-env": "node scripts/normalize-env.mjs",
+"seed": "tsc scripts/seed-coaches.ts"
     "seed:coaches": "tsx scripts/seed-coaches.ts"
   },
   "dependencies": {

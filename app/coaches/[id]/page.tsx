@@ -1,5 +1,8 @@
-import { supabase } from "@/supabase/client";
+import supabase from "@/supabase/client";
 import styles from "../styles.module.css";
+// Only add this if you use a <Link> somewhere on the page
+// import Link from "next/link";
+
 
 interface Profile {
   full_name: string | null;
@@ -9,6 +12,7 @@ interface Profile {
 
 interface Listing {
   id: string;
+
   title: string | null;
   price_cents: number;
   duration_minutes: number;
@@ -30,6 +34,7 @@ export default async function CoachPage({
   params: { id: string };
 }) {
   try {
+
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("full_name, role, avatar_url")
@@ -68,6 +73,7 @@ export default async function CoachPage({
           <div className={styles.name}>{profile.full_name ?? "Unnamed"}</div>
           <div className={styles.role}>{profile.role ?? ""}</div>
         </div>
+
         {listings.length > 0 ? (
           <div className={styles.grid}>
             {listings.map((listing) => (
@@ -92,5 +98,3 @@ export default async function CoachPage({
       </main>
     );
   }
-}
-

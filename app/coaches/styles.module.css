@@ -40,19 +40,15 @@
   height: 100%;
   object-fit: cover;
 }
-
 .name {
   font-weight: 600;
   margin-bottom: 0.25rem;
 }
 
-
 .role {
   color: #666;
   font-size: 0.875rem;
 }
-
-
 
 .emptyState {
   text-align: center;
