@@ -35,12 +35,14 @@ create table if not exists availability (
 
 create table if not exists bookings (
   id uuid primary key default gen_random_uuid(),
-  listing_id uuid not null,
-  coach_id uuid not null,
+  listing_id uuid references listings(id) on delete cascade,
+  coach_id uuid references profiles(id) on delete cascade,
   customer_email text,
   amount_paid_cents integer not null default 0,
   status text not null default 'paid',
   stripe_session_id text not null,
+  starts_at timestamptz,
+  ends_at timestamptz,
   created_at timestamptz not null default now()
 );
 

@@ -45,6 +45,17 @@ To verify Stripe webhooks locally:
 3. In another run `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
 4. Trigger a test with `stripe trigger checkout.session.completed`.
 
+### How to run a real test booking locally
+
+1. **Setup**: Ensure your `.env.local` has `STRIPE_SECRET_KEY` and `APP_URL=http://localhost:3000`
+2. **Get real IDs**: Query your Supabase database for existing `listing_id` and `coach_id` UUIDs
+3. **Test flow**: 
+   - Open `/test-booking` in your browser
+   - Enter the real UUIDs from step 2
+   - Complete payment with test card: `4242 4242 4242 4242`
+   - Check webhook logs and verify a new row appears in the `bookings` table
+4. **Troubleshooting**: If you get foreign key errors, create the missing records in your database first
+
 ## Zoom
 - Configure an Event Subscription to `http://localhost:3000/api/zoom/webhook`.
 - Set `ZOOM_VERIFICATION_TOKEN` in `.env.local`.

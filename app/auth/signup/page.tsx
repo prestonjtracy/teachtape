@@ -1,31 +1,95 @@
 "use client";
 
-import { useState } from "react";
-import { supabase } from "@/supabase/client";
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Auth } from "@supabase/auth-ui-react";
+import { ThemeSupa } from "@supabase/auth-ui-shared";
+import { createClient } from "@/lib/supabase/client";
+import Image from "next/image";
+import Link from "next/link";
 
 export default function SignupPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get('next') || '/dashboard';
+  const supabase = createClient();
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    await supabase.auth.signUp({ email, password });
-  }
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        router.push(next);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router, next, supabase]);
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <input
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <input
-        placeholder="Password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <button type="submit">Sign up</button>
-    </form>
+    <div className="min-h-screen flex items-center justify-center bg-background-subtle py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center">
+          <Link href="/" className="inline-block mb-6">
+            <Image
+              src="/logo-full.svg"
+              alt="TeachTape"
+              width={200}
+              height={60}
+              className="mx-auto"
+            />
+          </Link>
+          <h2 className="text-3xl font-bold text-neutral-text">
+            Join TeachTape
+          </h2>
+          <p className="mt-2 text-neutral-text-secondary">
+            Create your account and start learning from expert coaches
+          </p>
+        </div>
+        <div className="bg-white p-8 rounded-brand shadow-brand-md border border-gray-100">
+          <Auth
+            supabaseClient={supabase}
+            appearance={{
+              theme: ThemeSupa,
+              variables: {
+                default: {
+                  colors: {
+                    brand: '#F45A14',
+                    brandAccent: '#FF8A4C',
+                    brandButtonText: 'white',
+                    defaultButtonBackground: '#F8FAFC',
+                    defaultButtonBackgroundHover: '#F1F5F9',
+                    inputBackground: 'white',
+                    inputBorder: '#E5E7EB',
+                    inputBorderHover: '#D1D5DB',
+                    inputBorderFocus: '#F45A14',
+                  },
+                  borderWidths: {
+                    buttonBorderWidth: '1px',
+                    inputBorderWidth: '1px',
+                  },
+                  radii: {
+                    borderRadiusButton: '10px',
+                    buttonBorderRadius: '10px',
+                    inputBorderRadius: '10px',
+                  },
+                }
+              }
+            }}
+            providers={[]}
+            redirectTo={typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : 'http://localhost:3000/auth/callback'}
+            onlyThirdPartyProviders={false}
+            magicLink={true}
+            view="sign_up"
+          />
+        </div>
+        <div className="text-center">
+          <p className="text-sm text-neutral-text-muted">
+            Already have an account?{" "}
+            <Link href="/auth/login" className="font-medium text-brand-primary hover:text-brand-accent transition-colors">
+              Sign in here
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -40,9 +40,12 @@ async function seed() {
       .from("profiles")
       .insert({
         id: randomUUID(),
+        auth_user_id: randomUUID(), // For testing, using a random UUID
         role: "coach",
         full_name: coach.full_name,
         avatar_url: coach.avatar_url,
+        bio: `Experienced ${coach.full_name.split(' ')[0]} coach ready to help you improve your game.`,
+        sport: "Tennis" // Default sport for testing
       })
       .select("id")
       .single();

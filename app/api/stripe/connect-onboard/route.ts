@@ -49,20 +49,16 @@ export async function POST() {
   // Create an Express connected account for the user.
   const account = await stripe.accounts.create({ type: "express" });
 
+  // Initialize Supabase client
+  const supabase = createServerClient();
+
   // Persist the new account ID in Supabase if possible.
   try {
-// Persist the new account ID in Supabase if possible.
-try {
-  const { error: upsertErr } = await supabase
-    .from("stripe_accounts")
-    .insert({ account_id: account.id });
-
-  if (upsertErr) throw upsertErr;
-} catch (error) {
-  console.error("Failed to store Stripe account", error);
-}
+    const { error: upsertErr } = await supabase
       .from("stripe_accounts")
       .insert({ account_id: account.id });
+
+    if (upsertErr) throw upsertErr;
   } catch (error) {
     console.error("Failed to store Stripe account", error);
   }

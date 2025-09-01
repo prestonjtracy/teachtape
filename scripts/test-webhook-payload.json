@@ -1,0 +1,23 @@
+{
+  "id": "evt_test_webhook",
+  "object": "event",
+  "api_version": "2024-06-20",
+  "created": 1699123456,
+  "data": {
+    "object": {
+      "id": "cs_test_a1Pwk7MmoZXdghDyhN7OGUryMtuBp3JdevoLHqAPRrTYhS7FBjbwaK72EM",
+      "object": "checkout.session",
+      "amount_total": 7500,
+      "customer_details": {
+        "email": "test@example.com"
+      },
+      "metadata": {
+        "listing_id": "6ca03656-3dd7-415b-ad40-ab0ba2323304",
+        "coach_id": "30affe8c-5d96-4488-9193-e89a7891a9f6"
+      },
+      "payment_status": "paid",
+      "status": "complete"
+    }
+  },
+  "type": "checkout.session.completed"
+}

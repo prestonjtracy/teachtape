@@ -7,16 +7,23 @@
     "prebuild": "npm run check-env",
     "build": "next build",
     "start": "next start",
-    "test": "echo \"No tests yet\" && exit 0",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-"check-env": "node --env-file=.env.local scripts/check-env.ts || node scripts/check-env.ts",
-"normalize-env": "node scripts/normalize-env.mjs",
-"seed": "tsc scripts/seed-coaches.ts"
-    "seed:coaches": "tsx scripts/seed-coaches.ts"
+    "check-env": "node --env-file=.env.local scripts/check-env.ts || node scripts/check-env.ts",
+    "normalize-env": "node scripts/normalize-env.mjs",
+    "seed:coaches": "tsx scripts/seed-coaches.ts",
+    "seed": "tsx scripts/seed.ts",
+    "test:booking": "tsx scripts/test_booking_e2e.ts",
+    "dev:all": "concurrently \"next dev\" \"stripe listen --forward-to localhost:3000/api/stripe/webhook\""
   },
   "dependencies": {
+    "@supabase/auth-ui-react": "^0.4.7",
+    "@supabase/auth-ui-shared": "^0.1.8",
+    "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "2.45.4",
+    "clsx": "^2.1.1",
     "next": "14.2.5",
     "nodemailer": "^6.9.13",
     "react": "18.3.1",
@@ -26,12 +33,18 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@tailwindcss/forms": "^0.5.10",
     "@types/node": "20.11.30",
     "@types/nodemailer": "^7.0.0",
     "@types/react": "18.3.3",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
     "eslint": "8.57.0",
     "eslint-config-next": "14.2.5",
-    "typescript": "5.4.5",
-    "tsx": "4.7.0"
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "tsx": "4.7.0",
+    "typescript": "5.4.5"
   }
 }

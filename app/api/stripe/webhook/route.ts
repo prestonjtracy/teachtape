@@ -1,61 +1,306 @@
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
-import { createServerClient } from "@/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { sendBookingEmailsAsync } from "@/lib/email";
+import { getFeeBreakdown } from "@/lib/stripeFees";
+
+// Force Node.js runtime for webhook handling
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  console.log("🔗 Webhook hit");
+
+  // Validate environment variables
   const secretKey = process.env.STRIPE_SECRET_KEY;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!secretKey || !webhookSecret) {
-    console.error("Missing Stripe environment variables");
+    console.error("❌ Missing Stripe environment variables");
     return new Response("Server misconfigured", { status: 500 });
   }
 
+  // Initialize Stripe client
   const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
 
-  const body = await req.text();
-  const signature = req.headers.get("stripe-signature") ?? "";
+  // Get raw body for signature verification (do NOT parse as JSON first)
+  let rawBody: ArrayBuffer;
+  try {
+    rawBody = await req.arrayBuffer();
+  } catch (error) {
+    console.error("❌ Failed to read request body:", error);
+    return new Response("Failed to read request body", { status: 400 });
+  }
+
+  // Verify webhook signature
+  const signature = req.headers.get("stripe-signature");
+  if (!signature) {
+    console.error("❌ No stripe-signature header found");
+    return new Response("No signature header", { status: 400 });
+  }
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-  } catch (err) {
-    console.error("Webhook signature verification failed", err);
+    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    console.log(`✅ Webhook signature verified for event: ${event.type}`);
+  } catch (error) {
+    console.error("❌ Webhook signature verification failed:", error);
     return new Response("Invalid signature", { status: 400 });
   }
 
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.Checkout.Session;
-
-    const listingId = session.metadata?.listing_id;
-    const coachId = session.metadata?.coach_id;
-    const customerEmail =
-      session.customer_details?.email || session.customer_email || null;
-    const amountPaid = session.amount_total ?? 0;
-
-    if (listingId && coachId) {
-      const supabase = createServerClient();
-      const { error } = await supabase.from("bookings").insert({
-        listing_id: listingId,
-        coach_id: coachId,
-        customer_email: customerEmail,
-        amount_paid_cents: amountPaid,
-        status: "paid",
-        stripe_session_id: session.id,
-      });
-
-      if (error) {
-        console.error("Error inserting booking", error);
-        return new Response("Database insert failed", { status: 500 });
-      }
-    } else {
-      console.warn("Missing listing_id or coach_id in session metadata", session.id);
+  // Handle different event types
+  try {
+    switch (event.type) {
+      case "checkout.session.completed":
+        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session, stripe);
+        console.log("✅ Checkout completion handled successfully");
+        break;
+      
+      case "payment_intent.payment_failed":
+        await handlePaymentFailed(event.data.object as Stripe.PaymentIntent);
+        console.log("✅ Payment failure handled successfully");
+        break;
+      
+      default:
+        console.log(`ℹ️ Unhandled event type: ${event.type}`);
+        break;
     }
+  } catch (error) {
+    console.error(`❌ Error handling webhook event ${event.type}:`, error);
+    return new Response("Webhook processing failed", { status: 500 });
   }
 
+  // Always return 200 for valid webhooks
   return new Response(JSON.stringify({ received: true }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
 }
-export const dynamic = "force-dynamic";
+
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe: Stripe) {
+  // Retrieve expanded session with customer details and payment intent
+  const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
+    expand: ['customer_details', 'payment_intent']
+  });
+
+  console.log("📋 Processing checkout session:", {
+    session_id: expandedSession.id,
+    payment_intent: expandedSession.payment_intent,
+    amount_total: expandedSession.amount_total,
+    currency: expandedSession.currency
+  });
+
+  // Extract required metadata
+  const listingId = expandedSession.metadata?.listing_id;
+  const coachId = expandedSession.metadata?.coach_id;
+
+  if (!listingId || !coachId) {
+    console.error("⚠️ Missing required metadata:", {
+      listing_id: listingId,
+      coach_id: coachId,
+      metadata: expandedSession.metadata
+    });
+    throw new Error("Missing required metadata: listing_id or coach_id");
+  }
+
+  // Extract payment intent ID for idempotency
+  const paymentIntentId = typeof expandedSession.payment_intent === 'string' 
+    ? expandedSession.payment_intent 
+    : expandedSession.payment_intent?.id;
+
+  if (!paymentIntentId) {
+    console.error("⚠️ Missing payment intent ID");
+    throw new Error("Missing payment intent ID");
+  }
+
+  // Extract other required fields
+  const customerEmail = expandedSession.customer_details?.email;
+  const amountPaidCents = expandedSession.amount_total; // Already in cents
+  const stripeSessionId = expandedSession.id;
+
+  console.log("📝 Upserting booking with data:", {
+    payment_intent_id: paymentIntentId,
+    listing_id: listingId,
+    coach_id: coachId,
+    customer_email: customerEmail,
+    amount_paid_cents: amountPaidCents,
+    status: 'paid',
+    stripe_session_id: stripeSessionId
+  });
+
+  // Create server-side Supabase client
+  const supabase = createClient();
+
+  // Upsert booking record using payment_intent_id for idempotency
+  const { data: booking, error: dbError } = await supabase
+    .from("bookings")
+    .upsert({
+      payment_intent_id: paymentIntentId,
+      listing_id: listingId,
+      coach_id: coachId,
+      customer_email: customerEmail,
+      amount_paid_cents: amountPaidCents,
+      status: 'paid',
+      stripe_session_id: stripeSessionId
+    }, {
+      onConflict: 'payment_intent_id'
+    })
+    .select('id, payment_intent_id')
+    .single();
+
+  if (dbError) {
+    console.error("❌ Supabase upsert error:", {
+      error: dbError.message,
+      code: dbError.code,
+      details: dbError.details,
+      hint: dbError.hint
+    });
+    throw new Error(`Database upsert failed: ${dbError.message}`);
+  }
+
+  console.log("✅ Booking created/updated successfully:", {
+    booking_id: booking.id,
+    payment_intent_id: booking.payment_intent_id,
+    listing_id: listingId,
+    coach_id: coachId,
+    amount_paid_cents: amountPaidCents,
+    stripe_session_id: stripeSessionId
+  });
+
+  // Send booking confirmation emails (fire-and-forget)
+  try {
+    await sendBookingConfirmationEmails(expandedSession, booking.id);
+    console.log("📧 Booking emails queued for sending");
+  } catch (error) {
+    // Log error but don't throw - emails shouldn't block webhook response
+    console.error("⚠️ Email sending failed (non-blocking):", error);
+  }
+}
+
+async function sendBookingConfirmationEmails(session: Stripe.Checkout.Session, bookingId: string) {
+  const supabase = createClient();
+  
+  // Get additional booking data needed for emails
+  const listingId = session.metadata?.listing_id;
+  const coachId = session.metadata?.coach_id;
+  
+  if (!listingId || !coachId) {
+    console.warn("Missing metadata for email sending:", { listingId, coachId });
+    return;
+  }
+
+  // Fetch coach and listing details
+  const [coachResult, listingResult] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('full_name, auth_user_id')
+      .eq('id', coachId)
+      .single(),
+    supabase
+      .from('listings')
+      .select('title, description, duration_minutes')
+      .eq('id', listingId)
+      .single()
+  ]);
+
+  const coach = coachResult.data;
+  const listing = listingResult.data;
+
+  if (!coach || !listing) {
+    console.warn("Missing coach or listing data for emails:", { 
+      coach: !!coach, 
+      listing: !!listing 
+    });
+    return;
+  }
+
+  // Get coach's email from auth user (if available)
+  let coachEmail: string | undefined;
+  try {
+    const { data: authUser } = await supabase.auth.admin.getUserById(coach.auth_user_id);
+    coachEmail = authUser.user?.email;
+  } catch (error) {
+    console.warn("Could not fetch coach email:", error);
+  }
+
+  // Calculate fee breakdown for transparency
+  const feeBreakdown = getFeeBreakdown(session.amount_total || 0);
+
+  // Prepare email data
+  const emailData = {
+    sessionId: session.id,
+    bookingId: bookingId,
+    
+    athleteEmail: session.customer_details?.email || '',
+    athleteName: session.customer_details?.name,
+    
+    coachName: coach.full_name || 'Coach',
+    coachEmail: coachEmail,
+    
+    listingTitle: listing.title || 'Coaching Session',
+    listingDescription: listing.description,
+    duration: listing.duration_minutes || 60,
+    
+    amountPaid: session.amount_total || 0,
+    currency: session.currency || 'usd',
+    platformFee: feeBreakdown.platformFee,
+    
+    bookedAt: new Date(),
+    
+    nextSteps: "The coach will contact you within 24 hours to schedule your session."
+  };
+
+  // Send emails asynchronously (fire-and-forget)
+  sendBookingEmailsAsync(emailData);
+}
+
+async function handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {
+  console.log("💥 Processing payment failure:", {
+    payment_intent_id: paymentIntent.id,
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+    last_payment_error: paymentIntent.last_payment_error?.message
+  });
+
+  // Create server-side Supabase client
+  const supabase = createClient();
+
+  // Try to find and update the existing booking
+  const { data: booking, error: findError } = await supabase
+    .from("bookings")
+    .select('id, status, payment_intent_id')
+    .eq('payment_intent_id', paymentIntent.id)
+    .single();
+
+  if (findError) {
+    if (findError.code === 'PGRST116') {
+      console.log("ℹ️ No booking found for failed payment intent:", paymentIntent.id);
+      // This is normal - payment failed before checkout completed
+      return;
+    }
+    console.error("❌ Error finding booking for failed payment:", findError);
+    throw new Error(`Database query failed: ${findError.message}`);
+  }
+
+  // Update booking status to failed
+  const { error: updateError } = await supabase
+    .from("bookings")
+    .update({ 
+      status: 'failed',
+      // Optionally store the failure reason
+      // failure_reason: paymentIntent.last_payment_error?.message 
+    })
+    .eq('id', booking.id);
+
+  if (updateError) {
+    console.error("❌ Error updating booking status:", updateError);
+    throw new Error(`Failed to update booking status: ${updateError.message}`);
+  }
+
+  console.log("✅ Booking status updated to failed:", {
+    booking_id: booking.id,
+    payment_intent_id: paymentIntent.id,
+    previous_status: booking.status,
+    new_status: 'failed'
+  });
+}
