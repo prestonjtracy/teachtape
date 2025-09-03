@@ -93,7 +93,10 @@ export async function POST(req: NextRequest) {
       .eq('profile_id', listing.coach_id)
       .single();
 
-    if (coachError || !coachData || !coachData.stripe_account_id) {
+    // In development mode, skip Stripe account validation
+    const isDevelopment = process.env.DEVELOPMENT_MODE === 'true';
+    
+    if (!isDevelopment && (coachError || !coachData || !coachData.stripe_account_id)) {
       console.error(`❌ [POST /api/checkout] Coach Stripe account not found:`, {
         coachId: listing.coach_id,
         error: coachError
@@ -104,37 +107,100 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify coach's Stripe account is ready to receive payments
-    try {
-      const account = await stripe.accounts.retrieve(coachData.stripe_account_id);
-      
-      if (!account.charges_enabled) {
-        console.error(`❌ [POST /api/checkout] Coach charges not enabled:`, {
-          coachId: listing.coach_id,
-          stripeAccountId: coachData.stripe_account_id,
+    if (isDevelopment && (!coachData || !coachData.stripe_account_id)) {
+      console.log(`🚧 [POST /api/checkout] Development mode: Skipping Stripe validation`);
+      // In development mode, simulate a successful booking
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          url: `${appUrl}/success?session_id=dev_session_${Date.now()}`,
+          sessionId: `dev_session_${Date.now()}`,
+          development: true
+        }), 
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify coach's Stripe account is ready to receive payments (skip in development)
+    if (!isDevelopment) {
+      try {
+        const account = await stripe.accounts.retrieve(coachData.stripe_account_id);
+        
+        if (!account.charges_enabled) {
+          console.error(`❌ [POST /api/checkout] Coach charges not enabled:`, {
+            coachId: listing.coach_id,
+            stripeAccountId: coachData.stripe_account_id,
+            chargesEnabled: account.charges_enabled
+          });
+          return new Response(
+            JSON.stringify({ error: "Coach payment setup incomplete - charges not enabled" }), 
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        console.log(`✅ [POST /api/checkout] Coach Stripe account verified:`, {
+          accountId: coachData.stripe_account_id,
           chargesEnabled: account.charges_enabled
         });
+      } catch (stripeError) {
+        console.error(`❌ [POST /api/checkout] Failed to verify Stripe account:`, stripeError);
         return new Response(
-          JSON.stringify({ error: "Coach payment setup incomplete - charges not enabled" }), 
+          JSON.stringify({ error: "Coach payment setup verification failed" }), 
           { status: 400, headers: { "Content-Type": "application/json" } }
         );
       }
-
-      console.log(`✅ [POST /api/checkout] Coach Stripe account verified:`, {
-        accountId: coachData.stripe_account_id,
-        chargesEnabled: account.charges_enabled
-      });
-    } catch (stripeError) {
-      console.error(`❌ [POST /api/checkout] Failed to verify Stripe account:`, stripeError);
-      return new Response(
-        JSON.stringify({ error: "Coach payment setup verification failed" }), 
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+    } else {
+      console.log(`🚧 [POST /api/checkout] Development mode: Skipping Stripe account verification`);
     }
 
     const coachName = coachProfile?.full_name || 'Coach';
     const rateCents = listing.price_cents;
     
+    // In development mode with no Stripe account, create a simple checkout session without fees
+    if (isDevelopment && (!coachData || !coachData.stripe_account_id)) {
+      console.log(`🚧 [POST /api/checkout] Development mode: Creating simple checkout session`);
+      
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `${listing.title} with ${coachName}`,
+                description: listing.description || `${listing.duration_minutes}-minute coaching session`
+              },
+              unit_amount: rateCents
+            },
+            quantity: 1
+          }
+        ],
+        success_url: `${appUrl}/success?session_id={CHECKOUT_SESSION_ID}&dev=true`,
+        cancel_url: `${appUrl}/cancel?coach_id=${validatedData.coach_id}`,
+        metadata: {
+          listing_id: validatedData.listing_id,
+          coach_id: validatedData.coach_id,
+          development_mode: 'true'
+        }
+      });
+
+      console.log(`✅ [POST /api/checkout] Development Stripe session created:`, { 
+        sessionId: session.id,
+        url: session.url 
+      });
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          url: session.url,
+          sessionId: session.id,
+          development: true
+        }), 
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Production mode with full Stripe setup
     // Calculate platform fee using fee policy
     const platformFeeAmount = calculateApplicationFee(rateCents);
     const feeBreakdown = getFeeBreakdown(rateCents);

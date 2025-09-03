@@ -91,7 +91,7 @@ export default async function CoachesPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-brand focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                 />
               </div>
-              <Button variant="primary">Search</Button>
+              <Button variant="primary" type="button">Search</Button>
             </div>
           </div>
 
@@ -161,7 +161,7 @@ export default async function CoachesPage() {
           {/* Show more coaches CTA */}
           {profiles.length >= 6 && (
             <div className="mt-12 text-center">
-              <Button variant="outline" size="lg">
+              <Button variant="outline" size="lg" type="button">
                 Load More Coaches
               </Button>
             </div>
@@ -186,8 +186,8 @@ export default async function CoachesPage() {
             title="Failed to load coaches"
             description="Something went wrong. Please try refreshing the page."
             action={
-              <Button onClick={() => window.location.reload()}>
-                Try Again
+              <Button asChild>
+                <a href="/coaches">Try Again</a>
               </Button>
             }
           />

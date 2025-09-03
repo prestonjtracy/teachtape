@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import styles from "../styles.module.css";
+import ProfileHeader from '@/components/ProfileHeader';
+import ListingCard from '@/components/ListingCard';
+import RequestTimeModal from '@/components/RequestTimeModal';
 
 interface Coach {
   id: string;
@@ -25,22 +27,23 @@ interface CoachPageClientProps {
   coachId: string;
 }
 
-function getInitials(name: string | null) {
-  if (!name) return "?";
-  return name
-    .split(/\s+/)
-    .map((n) => n[0])
-    .filter(Boolean)
-    .join("")
-    .toUpperCase();
-}
-
-export default function CoachPageClient({ coach, coachId }: CoachPageClientProps) {
+export default function CoachPageClient({ coach }: CoachPageClientProps) {
   const [loading, setLoading] = useState<string | null>(null);
-
-  const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [selectedListing, setSelectedListing] = useState<Coach['listings'][0] | null>(null);
+  
+  // Get booking flow from environment (default to 'request')
+  const bookingFlow = (process.env.NEXT_PUBLIC_BOOKING_FLOW as 'legacy' | 'request') || 'request';
 
   const handleBookService = async (listing: Coach['listings'][0]) => {
+    if (bookingFlow === 'request') {
+      // New flow: Show request time modal
+      setSelectedListing(listing);
+      setShowRequestModal(true);
+      return;
+    }
+
+    // Legacy flow: Direct checkout
     setLoading(listing.id);
     
     try {
@@ -97,53 +100,68 @@ export default function CoachPageClient({ coach, coachId }: CoachPageClientProps
   };
 
   return (
-    <main className={styles.container}>
-      <div className={styles.profileHeader}>
-        <div className={styles.avatar}>
-          {coach.avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={coach.avatar_url} alt={coach.full_name ?? "Coach"} />
-          ) : (
-            getInitials(coach.full_name)
-          )}
-        </div>
-        <div className={styles.name}>{coach.full_name ?? "Unnamed"}</div>
-        <div className={styles.role}>{coach.role ?? ""}</div>
-        {coach.bio && (
-          <div className={styles.bio}>{coach.bio}</div>
-        )}
-        {coach.sport && (
-          <div className={styles.sport}>🎾 {coach.sport}</div>
-        )}
+    <main className="min-h-screen bg-[#F5F7FB] py-8">
+      {/* Profile Header */}
+      <div className="mb-12">
+        <ProfileHeader
+          avatar_url={coach.avatar_url}
+          full_name={coach.full_name}
+          role={coach.role}
+          bio={coach.bio}
+          sport={coach.sport}
+        />
       </div>
 
-      {coach.listings.length > 0 ? (
-        <div className={styles.grid}>
-          {coach.listings.map((listing) => (
-            <div key={listing.id} className={styles.card}>
-              <div className={styles.name}>{listing.title ?? "Untitled"}</div>
-              <div className={styles.role}>
-                {formatPrice(listing.price_cents)} · {listing.duration_minutes} min
-              </div>
-              {listing.description && (
-                <div className={styles.description}>{listing.description}</div>
-              )}
-              
-              {/* Book Session Button */}
-              <div className="mt-4">
-                <button
-                  onClick={() => handleBookService(listing)}
-                  disabled={loading === listing.id}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading === listing.id ? 'Redirecting...' : 'Book Session'}
-                </button>
-              </div>
+      {/* Listings Section */}
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        {coach.listings.length > 0 ? (
+          <>
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-[#123C7A] mb-2">Available Sessions</h2>
+              <p className="text-gray-600">Book a coaching session with {coach.full_name?.split(' ')[0] || 'this coach'}</p>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className={styles.emptyState}>No active listings found.</div>
+            
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {coach.listings.map((listing) => (
+                <ListingCard
+                  key={listing.id}
+                  listing={listing}
+                  onBookSession={handleBookService}
+                  loading={loading === listing.id}
+                  bookingFlow={bookingFlow}
+                />
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-12">
+            <div className="rounded-xl bg-white shadow-sm ring-1 ring-black/5 p-8 max-w-md mx-auto">
+              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#F5F7FB] flex items-center justify-center">
+                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-[#123C7A] mb-2">No Sessions Available</h3>
+              <p className="text-gray-600 text-sm">
+                This coach hasn't published any sessions yet. Check back later!
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* Request Time Modal */}
+      {selectedListing && (
+        <RequestTimeModal
+          isOpen={showRequestModal}
+          onClose={() => {
+            setShowRequestModal(false);
+            setSelectedListing(null);
+          }}
+          coachId={coach.id}
+          coachName={coach.full_name || 'Coach'}
+          listing={selectedListing}
+        />
       )}
     </main>
   );

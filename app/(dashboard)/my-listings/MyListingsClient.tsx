@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Toast from '@/components/Toast';
+import ListingImageUploader from '@/components/ListingImageUploader';
 
 interface Listing {
   id: string;
@@ -11,6 +12,7 @@ interface Listing {
   price_cents: number;
   duration_minutes: number;
   is_active: boolean;
+  image_url?: string;
   created_at: string;
 }
 
@@ -31,6 +33,7 @@ export default function MyListingsClient() {
     description: '',
     price_cents: '',
     duration_minutes: '60',
+    image_url: '',
     is_active: true
   });
   const [toast, setToast] = useState<{show: boolean; message: string; type: 'success' | 'error'}>({
@@ -116,6 +119,7 @@ export default function MyListingsClient() {
         description: '',
         price_cents: '',
         duration_minutes: '60',
+        image_url: '',
         is_active: true
       });
       
@@ -161,6 +165,7 @@ export default function MyListingsClient() {
       description: listing.description || '',
       price_cents: listing.price_cents.toString(),
       duration_minutes: listing.duration_minutes.toString(),
+      image_url: listing.image_url || '',
       is_active: listing.is_active
     });
     setShowForm(true);
@@ -191,6 +196,7 @@ export default function MyListingsClient() {
       description: '',
       price_cents: '',
       duration_minutes: '60',
+      image_url: '',
       is_active: true
     });
   }
@@ -209,179 +215,240 @@ export default function MyListingsClient() {
   }
 
   return (
-    <main style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1>My Listings</h1>
-        <button 
-          onClick={() => showForm ? handleCancelEdit() : setShowForm(true)}
-          style={{ 
-            padding: '8px 16px', 
-            backgroundColor: '#28a745', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: 4 
-          }}
-        >
-          {showForm ? 'Cancel' : 'New Listing'}
-        </button>
+    <main className="min-h-screen bg-background-subtle">
+      {/* Header Section */}
+      <div className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-ttBlue mb-2">My Listings</h1>
+              <p className="text-lg text-neutral-text-secondary">Manage your coaching services and sessions</p>
+            </div>
+            <button 
+              onClick={() => showForm ? handleCancelEdit() : setShowForm(true)}
+              className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                showForm 
+                  ? 'bg-gray-500 text-white hover:bg-gray-600' 
+                  : 'bg-ttOrange text-white hover:bg-ttOrange/90 shadow-md hover:shadow-lg'
+              }`}
+            >
+              {showForm ? 'Cancel' : '+ New Listing'}
+            </button>
+          </div>
+        </div>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleSubmit} style={{ 
-          marginBottom: 32, 
-          padding: 24, 
-          backgroundColor: '#f8f9fa', 
-          borderRadius: 8,
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: 16,
-          maxWidth: 600
-        }}>
-          <h2>{editingListing ? 'Edit Listing' : 'Create New Listing'}</h2>
-          
-          <div>
-            <label style={{ display: 'block', marginBottom: 4 }}>Title *</label>
-            <input
-              type="text"
-              required
-              value={formData.title}
-              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              style={{ width: '100%', padding: 8 }}
-              placeholder="e.g. Basketball Training Session"
-            />
-          </div>
+      <div className="max-w-7xl mx-auto px-6 py-8">
 
-          <div>
-            <label style={{ display: 'block', marginBottom: 4 }}>Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              rows={3}
-              style={{ width: '100%', padding: 8 }}
-              placeholder="Describe what you'll teach..."
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: 16 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: 4 }}>Price (cents) *</label>
-              <input
-                type="number"
-                required
-                value={formData.price_cents}
-                onChange={(e) => setFormData(prev => ({ ...prev, price_cents: e.target.value }))}
-                style={{ width: '100%', padding: 8 }}
-                placeholder="5000 = $50.00"
-              />
+        {showForm && (
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 mb-8">
+            <div className="px-8 py-6 border-b border-gray-100">
+              <h2 className="text-2xl font-bold text-ttBlue">
+                {editingListing ? 'Edit Listing' : 'Create New Listing'}
+              </h2>
+              <p className="text-neutral-text-secondary mt-2">
+                {editingListing ? 'Update your coaching service details' : 'Add a new coaching service to your offerings'}
+              </p>
             </div>
+            
+            <form onSubmit={handleSubmit} className="px-8 py-6 space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-neutral-text mb-2">
+                  Service Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.title}
+                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ttOrange focus:border-ttOrange transition-colors"
+                  placeholder="e.g. Basketball Training Session"
+                />
+              </div>
 
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: 4 }}>Duration (minutes) *</label>
-              <input
-                type="number"
-                required
-                value={formData.duration_minutes}
-                onChange={(e) => setFormData(prev => ({ ...prev, duration_minutes: e.target.value }))}
-                style={{ width: '100%', padding: 8 }}
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-semibold text-neutral-text mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ttOrange focus:border-ttOrange transition-colors resize-none"
+                  placeholder="Describe what you'll teach, your experience, and what clients can expect..."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-neutral-text mb-2">
+                    Price (cents) *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      required
+                      value={formData.price_cents}
+                      onChange={(e) => setFormData(prev => ({ ...prev, price_cents: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ttOrange focus:border-ttOrange transition-colors"
+                      placeholder="5000"
+                    />
+                    <span className="absolute right-4 top-3 text-sm text-neutral-text-muted">
+                      = ${formData.price_cents ? (parseInt(formData.price_cents) / 100).toFixed(2) : '0.00'}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-neutral-text mb-2">
+                    Duration (minutes) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={formData.duration_minutes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, duration_minutes: e.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ttOrange focus:border-ttOrange transition-colors"
+                    placeholder="60"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-neutral-text mb-2">
+                  Listing Image
+                </label>
+                <ListingImageUploader
+                  value={formData.image_url}
+                  onChange={(url) => setFormData(prev => ({ ...prev, image_url: url }))}
+                  listingId={editingListing?.id}
+                />
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="is_active"
+                  checked={formData.is_active}
+                  onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                  className="h-5 w-5 text-ttOrange border-gray-300 rounded focus:ring-ttOrange"
+                />
+                <label htmlFor="is_active" className="ml-3 text-sm font-medium text-neutral-text">
+                  Active (visible to clients)
+                </label>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="flex-1 bg-ttOrange text-white px-6 py-3 rounded-lg font-semibold hover:bg-ttOrange/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg"
+                >
+                  {loading ? (editingListing ? 'Updating...' : 'Creating...') : (editingListing ? 'Update Listing' : 'Create Listing')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="px-6 py-3 border border-gray-300 text-neutral-text rounded-lg font-semibold hover:bg-gray-50 transition-all duration-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
+        )}
 
-          <div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={formData.is_active}
-                onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
-              />
-              Active (visible to customers)
-            </label>
-          </div>
-
-          <button 
-            type="submit" 
-            disabled={loading}
-            style={{ 
-              padding: '12px 24px', 
-              backgroundColor: '#007bff', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: 4,
-              cursor: loading ? 'not-allowed' : 'pointer'
-            }}
-          >
-{loading ? (editingListing ? 'Updating...' : 'Creating...') : (editingListing ? 'Update Listing' : 'Create Listing')}
-          </button>
-        </form>
-      )}
-
-      <div>
         {listings.length === 0 ? (
-          <p>No listings yet. Create your first listing above!</p>
+          <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="w-24 h-24 mx-auto mb-6 bg-ttOrange/10 rounded-full flex items-center justify-center">
+              <svg className="w-12 h-12 text-ttOrange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-neutral-text mb-2">No listings yet</h3>
+            <p className="text-neutral-text-secondary mb-6">Create your first coaching service to get started</p>
+            <button 
+              onClick={() => setShowForm(true)}
+              className="bg-ttOrange text-white px-6 py-3 rounded-lg font-semibold hover:bg-ttOrange/90 transition-all duration-200 shadow-md hover:shadow-lg"
+            >
+              + Create Your First Listing
+            </button>
+          </div>
         ) : (
-          <div style={{ display: 'grid', gap: 16 }}>
+          <div className="grid gap-6">
             {listings.map(listing => (
               <div 
                 key={listing.id} 
-                style={{ 
-                  border: '1px solid #ddd', 
-                  borderRadius: 8, 
-                  padding: 16,
-                  backgroundColor: listing.is_active ? 'white' : '#f8f9fa'
-                }}
+                className={`bg-white rounded-xl shadow-md border transition-all duration-200 hover:shadow-lg ${
+                  listing.is_active 
+                    ? 'border-gray-200' 
+                    : 'border-gray-300 bg-gray-50'
+                }`}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                  <div style={{ flex: 1 }}>
-                    <h3 style={{ margin: '0 0 8px 0' }}>{listing.title}</h3>
-                    {listing.description && <p style={{ margin: '0 0 8px 0', color: '#666' }}>{listing.description}</p>}
-                    <div style={{ display: 'flex', gap: 16, fontSize: 14, color: '#666' }}>
-                      <span>${(listing.price_cents / 100).toFixed(2)}</span>
-                      <span>{listing.duration_minutes} mins</span>
-                      <span className={listing.is_active ? 'text-green-600' : 'text-gray-500'}>
-                        {listing.is_active ? 'Active' : 'Inactive'}
-                      </span>
+                <div className="p-6">
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-3">
+                        <h3 className="text-xl font-bold text-ttBlue truncate">{listing.title}</h3>
+                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                          listing.is_active 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {listing.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      
+                      {listing.description && (
+                        <p className="text-neutral-text-secondary mb-4 line-clamp-2">
+                          {listing.description}
+                        </p>
+                      )}
+                      
+                      <div className="flex flex-wrap gap-4 text-sm">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-ttOrange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                          </svg>
+                          <span className="font-semibold text-ttBlue">
+                            ${(listing.price_cents / 100).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-ttOrange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-neutral-text">
+                            {listing.duration_minutes} minutes
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button 
-                      onClick={() => handleEdit(listing)}
-                      style={{ 
-                        padding: '4px 12px', 
-                        backgroundColor: '#007bff',
-                        color: 'white', 
-                        border: 'none', 
-                        borderRadius: 4,
-                        fontSize: 12
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      onClick={() => toggleActive(listing.id, listing.is_active)}
-                      style={{ 
-                        padding: '4px 12px', 
-                        backgroundColor: listing.is_active ? '#dc3545' : '#28a745',
-                        color: 'white', 
-                        border: 'none', 
-                        borderRadius: 4,
-                        fontSize: 12
-                      }}
-                    >
-                      {listing.is_active ? 'Deactivate' : 'Activate'}
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(listing.id)}
-                      style={{ 
-                        padding: '4px 12px', 
-                        backgroundColor: '#dc3545',
-                        color: 'white', 
-                        border: 'none', 
-                        borderRadius: 4,
-                        fontSize: 12
-                      }}
-                    >
-                      Delete
-                    </button>
+                    
+                    <div className="flex flex-row lg:flex-col gap-2 lg:min-w-0">
+                      <button 
+                        onClick={() => handleEdit(listing)}
+                        className="flex-1 lg:flex-none bg-ttOrange text-white px-4 py-2 rounded-lg font-medium hover:bg-ttOrange/90 transition-all duration-200 text-sm"
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => toggleActive(listing.id, listing.is_active)}
+                        className={`flex-1 lg:flex-none px-4 py-2 rounded-lg font-medium transition-all duration-200 text-sm ${
+                          listing.is_active
+                            ? 'bg-gray-500 text-white hover:bg-gray-600'
+                            : 'bg-green-500 text-white hover:bg-green-600'
+                        }`}
+                      >
+                        {listing.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(listing.id)}
+                        className="flex-1 lg:flex-none bg-red-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-600 transition-all duration-200 text-sm"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

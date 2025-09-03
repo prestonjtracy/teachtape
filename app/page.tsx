@@ -7,29 +7,51 @@ export default function Page() {
   return (
     <>
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-brand-primary to-brand-secondary text-white py-20 sm:py-28 px-6 md:px-8">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="relative overflow-hidden bg-gradient-to-br from-ttOrange via-ttOrange to-ttBlue text-white py-24 sm:py-32 px-6 md:px-8">
+        {/* Modern Background Effects */}
+        <div className="absolute inset-0 bg-gradient-to-t from-ttBlue/30 via-transparent to-transparent"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.1),transparent_50%)]"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(255,255,255,0.05),transparent_50%)]"></div>
+        <div className="relative z-10 max-w-5xl mx-auto text-center">
+          {/* Hero Logo */}
+          <div className="mb-8">
+            <Image
+              src="/teachtape-logo-full.png"
+              alt="TeachTape"
+              width={400}
+              height={120}
+              priority
+              className="h-16 w-auto sm:h-20 sm:w-auto md:h-24 md:w-auto lg:h-28 lg:w-auto mx-auto"
+            />
+          </div>
+          
           {/* Hero Headline */}
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight text-white">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-8 leading-tight text-white">
             Master Your Sport with
             <br />
             Expert Coaching
           </h1>
           
           {/* Hero Subtext */}
-          <p className="text-lg sm:text-xl mb-10 max-w-2xl mx-auto leading-relaxed text-white/90">
+          <p className="text-lg sm:text-xl mb-12 max-w-2xl mx-auto leading-relaxed text-white/90">
             Connect with verified coaches for personalized 1:1 lessons and detailed film breakdowns. 
             Take your game to the next level.
           </p>
           
           {/* Hero Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center max-w-md mx-auto">
-            <button className="w-full sm:w-auto px-6 py-3 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-secondary/90 transition-colors shadow-lg">
-              <Link href="/coaches">Browse Coaches</Link>
-            </button>
-            <button className="w-full sm:w-auto px-6 py-3 bg-white text-brand-secondary font-semibold rounded-lg border border-brand-secondary hover:bg-gray-50 transition-colors shadow-lg">
-              <Link href="/auth/signup">Get Started</Link>
-            </button>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center max-w-lg mx-auto">
+            <Link 
+              href="/coaches"
+              className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-semibold rounded-lg border-2 border-white/30 transition-all duration-200 hover:bg-white/20 hover:border-white/50 active:scale-95 focus:outline-none focus:ring-4 focus:ring-white/30 shadow-xl hover:shadow-2xl"
+            >
+              Browse Coaches
+            </Link>
+            <Link 
+              href="/auth/signup"
+              className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-4 bg-white text-ttOrange font-semibold rounded-lg border-2 border-white transition-all duration-200 hover:bg-gray-50 hover:text-ttOrange/90 active:scale-95 focus:outline-none focus:ring-4 focus:ring-white/50 shadow-xl hover:shadow-2xl"
+            >
+              Get Started
+            </Link>
           </div>
         </div>
       </section>

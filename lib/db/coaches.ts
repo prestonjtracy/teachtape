@@ -1,4 +1,5 @@
 import { createServerClient } from "@/supabase/server";
+import { createClient } from '@supabase/supabase-js';
 import { z } from "zod";
 
 const UuidSchema = z.string().uuid("Invalid UUID format");
@@ -46,7 +47,11 @@ export async function getCoachById(id: string): Promise<CoachResult<CoachWithLis
     const validId = UuidSchema.parse(id);
     console.log(`✅ [getCoachById] UUID validation passed for: ${validId}`);
     
-    const supabase = createServerClient();
+    // Use service role to bypass RLS and ensure fresh data
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
     
     // First try to fetch from new coach/services structure
     const { data: coachData, error: coachError } = await supabase
@@ -116,6 +121,7 @@ export async function getCoachById(id: string): Promise<CoachResult<CoachWithLis
       .eq("id", validId)
       .eq("role", "coach") // Only coaches
       .single();
+
 
     if (profileError) {
       console.error(`❌ [getCoachById] Profile fetch error:`, {

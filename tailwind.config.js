@@ -9,16 +9,18 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          primary: '#F25C1F',    // TeachTape Orange
-          secondary: '#123A72',  // Navy Blue  
+          primary: '#F45B22',    // ttOrange
+          secondary: '#0A2F6B',  // ttBlue  
           accent: '#FF8A65',     // Lighter orange for hover
           50: '#FFF3E0',
           100: '#FFE0B2', 
-          500: '#F25C1F',
+          500: '#F45B22',
           600: '#E64A19',
           700: '#D84315',
           900: '#BF360C',
         },
+        ttOrange: '#F45B22',
+        ttBlue: '#0A2F6B',
         neutral: {
           text: '#111827',
           'text-secondary': '#374151', 

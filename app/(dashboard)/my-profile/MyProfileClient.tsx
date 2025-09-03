@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Toast from '@/components/Toast';
+import AvatarUploader from '@/components/AvatarUploader';
 
 interface Profile {
   id: string;
@@ -12,6 +13,22 @@ interface Profile {
   sport: string;
   avatar_url: string;
 }
+
+const SPORTS_OPTIONS = [
+  'Basketball',
+  'Football',
+  'Soccer',
+  'Tennis',
+  'Baseball',
+  'Golf',
+  'Swimming',
+  'Track & Field',
+  'Wrestling',
+  'Volleyball',
+  'Hockey',
+  'Lacrosse',
+  'Other'
+];
 
 export default function MyProfileClient() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -96,100 +113,140 @@ export default function MyProfileClient() {
   }
 
   if (!user) {
-    return <div>Loading...</div>;
+    return (
+      <div className="min-h-screen bg-background-subtle flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ttOrange"></div>
+      </div>
+    );
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 600 }}>
-      <h1>My Profile</h1>
-      
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div>
-          <label style={{ display: 'block', marginBottom: 4 }}>Full Name</label>
-          <input
-            type="text"
-            value={formData.full_name}
-            onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
-            style={{ width: '100%', padding: 8 }}
-          />
+    <main className="min-h-screen bg-background-subtle">
+      {/* Header Section */}
+      <div className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-[#123C7A] mb-2">My Profile</h1>
+            <p className="text-lg text-neutral-text-secondary">Manage your personal information and settings</p>
+          </div>
         </div>
+      </div>
 
-        <div>
-          <label style={{ display: 'block', marginBottom: 4 }}>Role</label>
-          <select
-            value={formData.role}
-            onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
-            style={{ width: '100%', padding: 8 }}
-          >
-            <option value="coach">Coach</option>
-            <option value="athlete">Athlete</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+          <form onSubmit={handleSubmit} className="p-8">
+            <div className="space-y-8">
+              {/* Avatar Section */}
+              <div>
+                <h3 className="text-lg font-semibold text-[#123C7A] mb-4">Profile Photo</h3>
+                <AvatarUploader
+                  value={formData.avatar_url}
+                  onChange={(url) => setFormData(prev => ({ ...prev, avatar_url: url }))}
+                  userEmail={user?.email}
+                />
+              </div>
 
-        <div>
-          <label style={{ display: 'block', marginBottom: 4 }}>Bio</label>
-          <textarea
-            value={formData.bio}
-            onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
-            rows={4}
-            style={{ width: '100%', padding: 8 }}
-          />
-        </div>
+              {/* Form Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Full Name */}
+                <div>
+                  <label className="block text-sm font-semibold text-neutral-text mb-2">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.full_name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#123C7A] focus:border-[#123C7A] transition-colors"
+                    placeholder="Enter your full name"
+                  />
+                </div>
 
-        <div>
-          <label style={{ display: 'block', marginBottom: 4 }}>Sport</label>
-          <input
-            type="text"
-            value={formData.sport}
-            onChange={(e) => setFormData(prev => ({ ...prev, sport: e.target.value }))}
-            style={{ width: '100%', padding: 8 }}
-            placeholder="e.g. Basketball, Tennis, Soccer"
-          />
-        </div>
+                {/* Role */}
+                <div>
+                  <label className="block text-sm font-semibold text-neutral-text mb-2">
+                    Role *
+                  </label>
+                  <select
+                    value={formData.role}
+                    onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#123C7A] focus:border-[#123C7A] transition-colors"
+                  >
+                    <option value="coach">Coach</option>
+                    <option value="athlete">Athlete</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
 
-        <div>
-          <label style={{ display: 'block', marginBottom: 4 }}>Avatar URL</label>
-          <input
-            type="url"
-            value={formData.avatar_url}
-            onChange={(e) => setFormData(prev => ({ ...prev, avatar_url: e.target.value }))}
-            style={{ width: '100%', padding: 8 }}
-            placeholder="https://example.com/avatar.jpg"
-          />
-        </div>
+                {/* Sport */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-neutral-text mb-2">
+                    Primary Sport
+                  </label>
+                  <select
+                    value={formData.sport}
+                    onChange={(e) => setFormData(prev => ({ ...prev, sport: e.target.value }))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#123C7A] focus:border-[#123C7A] transition-colors"
+                  >
+                    <option value="">Select a sport...</option>
+                    {SPORTS_OPTIONS.map(sport => (
+                      <option key={sport} value={sport}>{sport}</option>
+                    ))}
+                  </select>
+                </div>
 
-        <button 
-          type="submit" 
-          disabled={loading}
-          style={{ 
-            padding: '12px 24px', 
-            backgroundColor: '#007bff', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: 4,
-            cursor: loading ? 'not-allowed' : 'pointer'
-          }}
-        >
-          {loading ? 'Saving...' : profile ? 'Update Profile' : 'Create Profile'}
-        </button>
-      </form>
+                {/* Bio */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-neutral-text mb-2">
+                    Bio
+                  </label>
+                  <textarea
+                    value={formData.bio}
+                    onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
+                    rows={4}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#123C7A] focus:border-[#123C7A] transition-colors resize-none"
+                    placeholder="Tell us about yourself, your experience, and what makes you unique..."
+                  />
+                </div>
+              </div>
 
-      {profile && (
-        <div style={{ marginTop: 32, padding: 16, backgroundColor: '#f8f9fa', borderRadius: 4 }}>
-          <h3>Current Profile</h3>
-          <p><strong>Name:</strong> {profile.full_name}</p>
-          <p><strong>Role:</strong> {profile.role}</p>
-          <p><strong>Sport:</strong> {profile.sport}</p>
-          <p><strong>Bio:</strong> {profile.bio}</p>
-          {profile.avatar_url && (
-            <div>
-              <strong>Avatar:</strong><br />
-              <img src={profile.avatar_url} alt="Avatar" style={{ maxWidth: 100, maxHeight: 100 }} />
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-200">
+                <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="flex-1 bg-[#FF5A1F] text-white px-6 py-4 rounded-lg font-semibold hover:bg-[#E44F1B] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98]"
+                >
+                  {loading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Saving...
+                    </div>
+                  ) : profile ? 'Update Profile' : 'Create Profile'}
+                </button>
+                
+                {profile && (
+                  <button 
+                    type="button" 
+                    onClick={() => setFormData({
+                      full_name: profile.full_name || '',
+                      role: profile.role || 'coach',
+                      bio: profile.bio || '',
+                      sport: profile.sport || '',
+                      avatar_url: profile.avatar_url || ''
+                    })}
+                    className="px-6 py-4 border border-gray-300 text-neutral-text rounded-lg font-semibold hover:bg-gray-50 transition-all duration-200"
+                  >
+                    Reset Changes
+                  </button>
+                )}
+              </div>
             </div>
-          )}
+          </form>
         </div>
-      )}
+      </div>
       
       <Toast 
         show={toast.show}

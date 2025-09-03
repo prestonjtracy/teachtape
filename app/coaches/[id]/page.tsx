@@ -3,6 +3,8 @@ import styles from "../styles.module.css";
 import { notFound } from "next/navigation";
 import CoachPageClient from "./CoachPageClient";
 
+export const dynamic = "force-dynamic";
+
 function getInitials(name: string | null) {
   if (!name) return "?";
   return name
