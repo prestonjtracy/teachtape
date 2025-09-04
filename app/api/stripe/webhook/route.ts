@@ -56,6 +56,11 @@ export async function POST(req: NextRequest) {
         console.log("✅ Checkout completion handled successfully");
         break;
       
+      case "payment_intent.succeeded":
+        await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent);
+        console.log("✅ Payment success handled successfully");
+        break;
+      
       case "payment_intent.payment_failed":
         await handlePaymentFailed(event.data.object as Stripe.PaymentIntent);
         console.log("✅ Payment failure handled successfully");
@@ -254,18 +259,109 @@ async function sendBookingConfirmationEmails(session: Stripe.Checkout.Session, b
   sendBookingEmailsAsync(emailData);
 }
 
+async function handlePaymentSucceeded(paymentIntent: Stripe.PaymentIntent) {
+  console.log("✅ Processing payment success:", {
+    payment_intent_id: paymentIntent.id,
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+    booking_request_id: paymentIntent.metadata?.booking_request_id
+  });
+
+  const supabase = createClient();
+  const bookingRequestId = paymentIntent.metadata?.booking_request_id;
+
+  if (bookingRequestId) {
+    // This is from /api/requests/[id]/accept flow - update booking_request status
+    const { error: updateError } = await supabase
+      .from('booking_requests')
+      .update({ status: 'accepted' })
+      .eq('id', bookingRequestId);
+
+    if (updateError) {
+      console.error('❌ Failed to update booking request status:', updateError);
+    }
+
+    // Get booking request to send system message
+    const { data: bookingRequest, error: requestError } = await supabase
+      .from('booking_requests')
+      .select('conversation_id')
+      .eq('id', bookingRequestId)
+      .single();
+
+    if (!requestError && bookingRequest?.conversation_id) {
+      // Send system message to conversation
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: bookingRequest.conversation_id,
+          sender_id: null,
+          body: "✅ Payment confirmed. Booking is now active!",
+          kind: 'system'
+        });
+
+      if (messageError) {
+        console.warn('⚠️ Failed to send payment success message:', messageError);
+      }
+    }
+  }
+
+  console.log("✅ Payment success handled for PaymentIntent:", paymentIntent.id);
+}
+
 async function handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {
   console.log("💥 Processing payment failure:", {
     payment_intent_id: paymentIntent.id,
     amount: paymentIntent.amount,
     currency: paymentIntent.currency,
-    last_payment_error: paymentIntent.last_payment_error?.message
+    last_payment_error: paymentIntent.last_payment_error?.message,
+    booking_request_id: paymentIntent.metadata?.booking_request_id
   });
 
-  // Create server-side Supabase client
   const supabase = createClient();
+  const bookingRequestId = paymentIntent.metadata?.booking_request_id;
 
-  // Try to find and update the existing booking
+  // Handle booking request payment failures
+  if (bookingRequestId) {
+    // Update booking request status back to pending
+    const { error: updateError } = await supabase
+      .from('booking_requests')
+      .update({ status: 'pending' })
+      .eq('id', bookingRequestId);
+
+    if (updateError) {
+      console.error('❌ Failed to update booking request status:', updateError);
+    }
+
+    // Get booking request to send system message
+    const { data: bookingRequest, error: requestError } = await supabase
+      .from('booking_requests')
+      .select('conversation_id')
+      .eq('id', bookingRequestId)
+      .single();
+
+    if (!requestError && bookingRequest?.conversation_id) {
+      const errorMessage = paymentIntent.last_payment_error?.message || 'Payment failed';
+      
+      // Send system message to conversation
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: bookingRequest.conversation_id,
+          sender_id: null,
+          body: `❌ Payment failed: ${errorMessage}. Please try again or update your payment method.`,
+          kind: 'system'
+        });
+
+      if (messageError) {
+        console.warn('⚠️ Failed to send payment failure message:', messageError);
+      }
+    }
+
+    console.log("✅ Booking request payment failure handled:", bookingRequestId);
+    return;
+  }
+
+  // Handle legacy checkout booking failures
   const { data: booking, error: findError } = await supabase
     .from("bookings")
     .select('id, status, payment_intent_id')

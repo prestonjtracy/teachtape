@@ -1,0 +1,359 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import Stripe from "stripe";
+import { z } from "zod";
+import { sendBookingRequestEmailsAsync } from "@/lib/email";
+
+const AcceptRequestSchema = z.object({
+  id: z.string().uuid("Invalid request ID"),
+});
+
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  console.log('🔍 [POST /api/requests/[id]/accept] Request received:', params.id);
+  
+  try {
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    if (!secretKey) {
+      console.error('❌ [POST /api/requests/accept] Missing STRIPE_SECRET_KEY');
+      return NextResponse.json(
+        { error: "Server configuration error" },
+        { status: 500 }
+      );
+    }
+
+    const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
+    
+    // Validate request ID
+    const validatedData = AcceptRequestSchema.parse(params);
+    const requestId = validatedData.id;
+
+    const supabase = createClient();
+
+    // Get current user (coach)
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error('❌ [POST /api/requests/accept] User not authenticated:', userError);
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    // Get coach profile
+    const { data: coachProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, role')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (profileError || !coachProfile || coachProfile.role !== 'coach') {
+      console.error('❌ [POST /api/requests/accept] Coach profile not found or invalid role:', profileError);
+      return NextResponse.json(
+        { error: "Coach profile not found" },
+        { status: 404 }
+      );
+    }
+
+    // Get booking request with related data including coach info for Connect
+    const { data: bookingRequest, error: requestError } = await supabase
+      .from('booking_requests')
+      .select(`
+        *,
+        listing:listings!inner(*),
+        athlete:profiles!booking_requests_athlete_id_fkey(id, full_name, email),
+        coach:profiles!booking_requests_coach_id_fkey(id, full_name)
+      `)
+      .eq('id', requestId)
+      .eq('coach_id', coachProfile.id)
+      .eq('status', 'pending')
+      .single();
+
+    if (requestError || !bookingRequest) {
+      console.error('❌ [POST /api/requests/accept] Booking request not found:', requestError);
+      return NextResponse.json(
+        { error: "Booking request not found or not accessible" },
+        { status: 404 }
+      );
+    }
+
+    // Verify payment method exists
+    if (!bookingRequest.payment_method_id) {
+      console.error('❌ [POST /api/requests/accept] No payment method saved');
+      return NextResponse.json(
+        { error: "No payment method found for this request" },
+        { status: 400 }
+      );
+    }
+
+    // Get coach's Stripe Connect account ID
+    const { data: coachData, error: coachError } = await supabase
+      .from('coaches')
+      .select('stripe_account_id')
+      .eq('profile_id', coachProfile.id)
+      .single();
+
+    if (coachError || !coachData?.stripe_account_id) {
+      console.error('❌ [POST /api/requests/accept] Coach Stripe account not found:', coachError);
+      return NextResponse.json(
+        { error: "Coach payment setup incomplete" },
+        { status: 400 }
+      );
+    }
+
+    const coachStripeAccountId = coachData.stripe_account_id;
+
+    // Calculate application fee (5% of listing price)
+    const listingPrice = bookingRequest.listing.price_cents;
+    const applicationFee = Math.round(listingPrice * 0.05); // 5% platform fee
+
+    console.log('✅ [POST /api/requests/accept] Processing Connect payment:', {
+      request_id: requestId,
+      payment_method_id: bookingRequest.payment_method_id,
+      amount: listingPrice,
+      application_fee: applicationFee,
+      coach_account: coachStripeAccountId
+    });
+
+    // Create PaymentIntent with Stripe Connect
+    let paymentIntent: Stripe.PaymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: listingPrice,
+        currency: 'usd',
+        payment_method: bookingRequest.payment_method_id,
+        confirmation_method: 'manual',
+        confirm: true,
+        off_session: true, // Indicates this is for a saved payment method
+        application_fee_amount: applicationFee,
+        transfer_data: {
+          destination: coachStripeAccountId,
+        },
+        on_behalf_of: coachStripeAccountId, // For compliance
+        metadata: {
+          booking_request_id: requestId,
+          listing_id: bookingRequest.listing_id,
+          coach_id: bookingRequest.coach_id,
+          athlete_id: bookingRequest.athlete_id,
+          coach_stripe_account: coachStripeAccountId,
+        },
+        description: `TeachTape: ${bookingRequest.listing.title}`,
+      });
+
+      console.log('✅ [POST /api/requests/accept] Connect PaymentIntent created:', paymentIntent.id);
+    } catch (stripeError: any) {
+      console.error('❌ [POST /api/requests/accept] Stripe Connect payment failed:', stripeError);
+      
+      // Send failure message to conversation
+      let errorMessage = "Payment failed. Please try again.";
+      
+      // Handle specific Stripe errors with user-friendly messages
+      if (stripeError.code === 'authentication_required') {
+        errorMessage = "Payment authentication required. Please update your payment method.";
+      } else if (stripeError.code === 'card_declined') {
+        errorMessage = "Payment was declined. Please try a different payment method.";
+      } else if (stripeError.code === 'insufficient_funds') {
+        errorMessage = "Insufficient funds. Please use a different payment method.";
+      } else if (stripeError.code === 'expired_card') {
+        errorMessage = "Your card has expired. Please update your payment method.";
+      } else if (stripeError.message) {
+        errorMessage = `Payment failed: ${stripeError.message}`;
+      }
+
+      // Send error message to conversation
+      const { error: msgError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: bookingRequest.conversation_id,
+          sender_id: null,
+          body: `❌ ${errorMessage}`,
+          kind: 'system'
+        });
+
+      if (msgError) {
+        console.warn('⚠️ [POST /api/requests/accept] Failed to send error message:', msgError);
+      }
+      
+      return NextResponse.json(
+        { error: errorMessage },
+        { status: 400 }
+      );
+    }
+
+    // Handle different payment intent statuses
+    if (paymentIntent.status === 'requires_action') {
+      console.log('🔐 [POST /api/requests/accept] Payment requires additional authentication (SCA)');
+      
+      // Send message to conversation with payment link
+      const appUrl = process.env.APP_URL || 'https://teachtape.local';
+      const paymentUrl = `${appUrl}/payment/complete?payment_intent_client_secret=${paymentIntent.client_secret}&conversation_id=${bookingRequest.conversation_id}`;
+      const scaMessage = `🔐 Payment requires additional authentication. Please complete your payment using this secure link: ${paymentUrl}`;
+      
+      const { error: scaMessageError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: bookingRequest.conversation_id,
+          sender_id: null,
+          body: scaMessage,
+          kind: 'system'
+        });
+
+      if (scaMessageError) {
+        console.warn('⚠️ [POST /api/requests/accept] Failed to send SCA message:', scaMessageError);
+      }
+
+      return NextResponse.json({
+        success: false,
+        requires_action: true,
+        payment_intent_id: paymentIntent.id,
+        client_secret: paymentIntent.client_secret,
+        message: 'Payment requires additional authentication. Check the chat for payment link.'
+      });
+    }
+
+    if (paymentIntent.status !== 'succeeded') {
+      console.error('❌ [POST /api/requests/accept] Payment not succeeded:', paymentIntent.status);
+      
+      // Send failure message to conversation
+      const failureMessage = `❌ Payment failed with status: ${paymentIntent.status}. Please try again or update your payment method.`;
+      
+      const { error: failureMessageError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: bookingRequest.conversation_id,
+          sender_id: null,
+          body: failureMessage,
+          kind: 'system'
+        });
+
+      if (failureMessageError) {
+        console.warn('⚠️ [POST /api/requests/accept] Failed to send failure message:', failureMessageError);
+      }
+
+      return NextResponse.json(
+        { error: `Payment failed with status: ${paymentIntent.status}` },
+        { status: 400 }
+      );
+    }
+
+    console.log('✅ [POST /api/requests/accept] Payment successful, creating booking');
+
+    // Create booking record (reuse webhook logic structure)
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .insert({
+        payment_intent_id: paymentIntent.id,
+        listing_id: bookingRequest.listing_id,
+        coach_id: bookingRequest.coach_id,
+        customer_email: bookingRequest.athlete.email,
+        athlete_email: bookingRequest.athlete.email,
+        athlete_name: bookingRequest.athlete.full_name,
+        amount_paid_cents: bookingRequest.listing.price_cents,
+        status: 'confirmed',
+        starts_at: bookingRequest.proposed_start,
+        ends_at: bookingRequest.proposed_end,
+        stripe_session_id: null, // No session for off-session payments
+      })
+      .select('id')
+      .single();
+
+    if (bookingError) {
+      console.error('❌ [POST /api/requests/accept] Booking creation failed:', bookingError);
+      return NextResponse.json(
+        { error: "Failed to create booking" },
+        { status: 500 }
+      );
+    }
+
+    // Update booking request status
+    const { error: updateError } = await supabase
+      .from('booking_requests')
+      .update({ status: 'accepted' })
+      .eq('id', requestId);
+
+    if (updateError) {
+      console.error('❌ [POST /api/requests/accept] Failed to update request status:', updateError);
+      // Don't fail the whole request for this
+    }
+
+    // Send system message to conversation
+    const systemMessage = "✅ Booking accepted! Payment processing...";
+    const { error: messageError } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: bookingRequest.conversation_id,
+        sender_id: null, // System message
+        body: systemMessage,
+        kind: 'system'
+      });
+
+    if (messageError) {
+      console.warn('⚠️ [POST /api/requests/accept] Failed to send system message:', messageError);
+    } else {
+      console.log('✅ [POST /api/requests/accept] System message sent:', systemMessage);
+    }
+
+    console.log('✅ [POST /api/requests/accept] Request accepted successfully:', {
+      request_id: requestId,
+      booking_id: booking.id,
+      payment_intent_id: paymentIntent.id
+    });
+
+    // Send email notification to athlete (fire-and-forget)
+    try {
+      const { data: athleteAuth } = await supabase.auth.admin.getUserById(bookingRequest.athlete.id);
+      const athleteEmail = athleteAuth.user?.email;
+
+      if (athleteEmail) {
+        const emailData = {
+          requestId: requestId,
+          athleteEmail: athleteEmail,
+          athleteName: bookingRequest.athlete.full_name || undefined,
+          coachName: bookingRequest.coach.full_name || 'Coach',
+          coachEmail: user.email!,
+          listingTitle: bookingRequest.listing.title,
+          listingDescription: undefined,
+          duration: undefined,
+          priceCents: bookingRequest.listing.price_cents,
+          proposedStart: new Date(bookingRequest.proposed_start),
+          proposedEnd: new Date(bookingRequest.proposed_end),
+          timezone: bookingRequest.timezone,
+          requestedAt: new Date(),
+          chatUrl: `${process.env.APP_URL || 'https://teachtape.local'}/messages/${bookingRequest.conversation_id}`
+        };
+
+        sendBookingRequestEmailsAsync(emailData, 'accepted');
+        console.log('📧 [POST /api/requests/accept] Email notification queued for athlete');
+      }
+    } catch (emailError) {
+      console.warn('⚠️ [POST /api/requests/accept] Failed to send email notification:', emailError);
+    }
+
+    return NextResponse.json({
+      success: true,
+      booking_id: booking.id,
+      payment_intent_id: paymentIntent.id,
+      message: 'Booking request accepted and payment processed successfully'
+    });
+
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error('❌ [POST /api/requests/accept] Validation error:', error.errors);
+      return NextResponse.json(
+        { 
+          error: "Invalid request data",
+          details: error.errors
+        },
+        { status: 400 }
+      );
+    }
+
+    console.error('❌ [POST /api/requests/accept] Unexpected error:', error);
+    return NextResponse.json(
+      { 
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error"
+      },
+      { status: 500 }
+    );
+  }
+}

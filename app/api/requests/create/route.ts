@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import { z } from "zod";
+import { sendBookingRequestEmailsAsync } from "@/lib/email";
 
 const CreateBookingRequestSchema = z.object({
   listing_id: z.string().uuid("Invalid listing ID"),
@@ -204,18 +205,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Send initial message to conversation
+    // Send initial system message to conversation
     const proposedStart = new Date(validatedData.proposed_start);
     const proposedEnd = new Date(validatedData.proposed_end);
-    const messageBody = `Hi! I'd like to request a coaching session for "${listing.title}" on ${proposedStart.toLocaleDateString()} from ${proposedStart.toLocaleTimeString()} to ${proposedEnd.toLocaleTimeString()} (${validatedData.timezone}). Looking forward to hearing from you!`;
+    
+    // Format the time nicely
+    const startTime = proposedStart.toLocaleTimeString([], { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
+    const endTime = proposedEnd.toLocaleTimeString([], { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
+    const dateStr = proposedStart.toLocaleDateString([], {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
+
+    const systemMessage = `🗓️ Booking request: ${dateStr}, ${startTime}–${endTime} (${validatedData.timezone})`;
 
     const { error: messageError } = await supabase
       .from('messages')
       .insert({
         conversation_id: conversationId,
-        sender_id: profile.id,
-        body: messageBody,
-        kind: 'booking_request'
+        sender_id: null, // System message
+        body: systemMessage,
+        kind: 'system'
       });
 
     if (messageError) {
@@ -223,12 +242,96 @@ export async function POST(req: NextRequest) {
       // Don't fail the request if message creation fails
     }
 
+    // Check if we need to create a SetupIntent for payment method collection
+    let setupIntentClientSecret: string | null = null;
+    
+    // Only create SetupIntent if no payment method was provided
+    if (!validatedData.payment_method_id && !validatedData.setup_intent_id) {
+      console.log('🔧 [POST /api/requests/create] Creating SetupIntent for payment method collection');
+      
+      try {
+        const setupIntent = await stripe.setupIntents.create({
+          usage: 'off_session', // For future payments
+          metadata: {
+            booking_request_id: bookingRequest.id,
+            athlete_id: profile.id,
+            coach_id: validatedData.coach_id,
+            listing_id: validatedData.listing_id,
+          },
+          description: `Payment setup for ${listing.title}`,
+        });
+
+        setupIntentClientSecret = setupIntent.client_secret;
+        
+        // Update the booking request with the setup intent ID
+        await supabase
+          .from('booking_requests')
+          .update({ setup_intent_id: setupIntent.id })
+          .eq('id', bookingRequest.id);
+
+        console.log('✅ [POST /api/requests/create] SetupIntent created:', setupIntent.id);
+      } catch (setupError) {
+        console.error('❌ [POST /api/requests/create] SetupIntent creation failed:', setupError);
+        // Don't fail the entire request - the payment can be handled later
+      }
+    }
+
     console.log('✅ [POST /api/requests/create] Booking request created successfully:', bookingRequest.id);
+
+    // Send email notification to coach (fire-and-forget)
+    try {
+      const { data: coachProfile, error: coachProfileError } = await supabase
+        .from('profiles')
+        .select('full_name, auth_user_id')
+        .eq('id', validatedData.coach_id)
+        .single();
+
+      const { data: athleteProfile, error: athleteProfileError } = await supabase
+        .from('profiles')
+        .select('full_name, auth_user_id')
+        .eq('id', profile.id)
+        .single();
+
+      if (coachProfile && athleteProfile) {
+        // Get coach email from auth
+        const { data: coachAuth } = await supabase.auth.admin.getUserById(coachProfile.auth_user_id);
+        const coachEmail = coachAuth.user?.email;
+
+        const { data: athleteAuth } = await supabase.auth.admin.getUserById(athleteProfile.auth_user_id);
+        const athleteEmail = athleteAuth.user?.email;
+
+        if (coachEmail && athleteEmail) {
+          const emailData = {
+            requestId: bookingRequest.id,
+            athleteEmail: athleteEmail,
+            athleteName: athleteProfile.full_name || undefined,
+            coachName: coachProfile.full_name || 'Coach',
+            coachEmail: coachEmail,
+            listingTitle: listing.title,
+            listingDescription: listing.description || undefined,
+            duration: listing.duration_minutes || undefined,
+            priceCents: listing.price_cents,
+            proposedStart: new Date(validatedData.proposed_start),
+            proposedEnd: new Date(validatedData.proposed_end),
+            timezone: validatedData.timezone,
+            requestedAt: new Date(),
+            chatUrl: `${process.env.APP_URL || 'https://teachtape.local'}/messages/${conversationId}`
+          };
+
+          sendBookingRequestEmailsAsync(emailData, 'new_request');
+          console.log('📧 [POST /api/requests/create] Email notification queued for coach');
+        }
+      }
+    } catch (emailError) {
+      console.warn('⚠️ [POST /api/requests/create] Failed to send email notification:', emailError);
+    }
 
     return NextResponse.json({
       success: true,
       booking_request_id: bookingRequest.id,
       conversation_id: conversationId,
+      client_secret: setupIntentClientSecret, // Will be null if payment method already exists
+      needs_payment_method: setupIntentClientSecret !== null,
       message: 'Booking request created successfully'
     });
 

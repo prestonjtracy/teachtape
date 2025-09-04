@@ -1,6 +1,14 @@
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
-import { BookingEmailData, generateAthleteReceiptEmail, generateCoachNotificationEmail } from "./emailTemplates";
+import { 
+  BookingEmailData, 
+  BookingRequestEmailData,
+  generateAthleteReceiptEmail, 
+  generateCoachNotificationEmail,
+  generateNewRequestCoachEmail,
+  generateRequestAcceptedAthleteEmail,
+  generateRequestDeclinedAthleteEmail
+} from "./emailTemplates";
 
 const from = "TeachTape <no-reply@teachtape.local>";
 
@@ -116,5 +124,74 @@ export function sendBookingEmailsAsync(data: BookingEmailData): void {
   // Send emails in the background without awaiting
   setImmediate(async () => {
     await sendBookingEmails(data);
+  });
+}
+
+/**
+ * Send booking request emails
+ */
+export async function sendBookingRequestEmails(data: BookingRequestEmailData, type: 'new_request' | 'accepted' | 'declined'): Promise<void> {
+  try {
+    console.log(`📧 [sendBookingRequestEmails] Sending ${type} emails:`, {
+      athleteEmail: data.athleteEmail,
+      coachEmail: data.coachEmail,
+      requestId: data.requestId
+    });
+
+    let athleteEmail: { subject: string; html: string; text: string } | null = null;
+    let coachEmail: { subject: string; html: string; text: string } | null = null;
+
+    switch (type) {
+      case 'new_request':
+        coachEmail = generateNewRequestCoachEmail(data);
+        break;
+      case 'accepted':
+        athleteEmail = generateRequestAcceptedAthleteEmail(data);
+        break;
+      case 'declined':
+        athleteEmail = generateRequestDeclinedAthleteEmail(data);
+        break;
+    }
+
+    // Send athlete email if needed
+    if (athleteEmail) {
+      await sendEmailResend({
+        to: data.athleteEmail,
+        subject: athleteEmail.subject,
+        html: athleteEmail.html,
+        text: athleteEmail.text
+      });
+      console.log(`✅ [sendBookingRequestEmails] ${type} email sent to athlete: ${data.athleteEmail}`);
+    }
+
+    // Send coach email if needed
+    if (coachEmail) {
+      await sendEmailResend({
+        to: data.coachEmail,
+        subject: coachEmail.subject,
+        html: coachEmail.html,
+        text: coachEmail.text
+      });
+      console.log(`✅ [sendBookingRequestEmails] ${type} email sent to coach: ${data.coachEmail}`);
+    }
+
+  } catch (error) {
+    // Log error but don't throw - this is fire-and-forget
+    console.error(`❌ [sendBookingRequestEmails] Failed to send ${type} emails:`, {
+      error: error instanceof Error ? error.message : error,
+      requestId: data.requestId,
+      athleteEmail: data.athleteEmail,
+      coachEmail: data.coachEmail
+    });
+  }
+}
+
+/**
+ * Fire-and-forget email sending for booking requests
+ */
+export function sendBookingRequestEmailsAsync(data: BookingRequestEmailData, type: 'new_request' | 'accepted' | 'declined'): void {
+  // Send emails in the background without awaiting
+  setImmediate(async () => {
+    await sendBookingRequestEmails(data, type);
   });
 }

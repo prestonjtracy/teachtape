@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { createBrowserClient } from '@supabase/ssr';
 import Toast from '@/components/Toast';
 import AvatarUploader from '@/components/AvatarUploader';
 
@@ -33,6 +33,7 @@ const SPORTS_OPTIONS = [
 export default function MyProfileClient() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [formData, setFormData] = useState({
     full_name: '',
@@ -47,33 +48,102 @@ export default function MyProfileClient() {
     type: 'success'
   });
   
-  const supabase = createClient();
+  // Create Supabase client directly to bypass any config issues
+  const supabase = createBrowserClient(
+    'https://atjwhulpsbloxubpkjkl.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0andodWxwc2Jsb3h1YnBramtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxMDE4NTIsImV4cCI6MjA3MDY3Nzg1Mn0.A2-1tp06noivdE7ZReyPWv_1DYHTrbgbp_zrsj7jxbQ'
+  );
 
   useEffect(() => {
+    let isMounted = true;
+    let authTimeout: NodeJS.Timeout;
+
     async function loadUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('auth_user_id', user.id)
-          .single();
+      try {
+        if (!isMounted) return;
         
-        if (profile) {
-          setProfile(profile);
-          setFormData({
-            full_name: profile.full_name || '',
-            role: profile.role || 'coach',
-            bio: profile.bio || '',
-            sport: profile.sport || '',
-            avatar_url: profile.avatar_url || ''
-          });
+        console.log('🔍 Loading user...');
+        console.log('🔧 Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+        console.log('🔧 Supabase Anon Key exists:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+        
+        // Set a timeout for the auth request
+        authTimeout = setTimeout(() => {
+          console.error('❌ Auth request timed out after 5 seconds');
+          if (isMounted) {
+            setInitialLoading(false);
+          }
+        }, 5000);
+        
+        console.log('🔄 Making auth request...');
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        // Clear timeout if request completed
+        clearTimeout(authTimeout);
+        
+        if (!isMounted) return;
+        
+        if (authError) {
+          console.error('Auth error:', authError);
+          setInitialLoading(false);
+          return;
+        }
+        
+        console.log('👤 User loaded:', user?.email || 'No email');
+        console.log('👤 User ID:', user?.id || 'No ID');
+        setUser(user);
+        
+        if (user) {
+          console.log('📝 Loading profile for user:', user.id);
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('auth_user_id', user.id)
+            .single();
+          
+          if (!isMounted) return;
+          
+          if (profileError) {
+            console.error('Profile error:', profileError);
+            if (profileError.code === 'PGRST116') {
+              console.log('📝 No profile found, will show create form');
+            }
+          } else {
+            console.log('✅ Profile loaded:', profile?.full_name);
+          }
+          
+          if (profile) {
+            setProfile(profile);
+            setFormData({
+              full_name: profile.full_name || '',
+              role: profile.role || 'coach',
+              bio: profile.bio || '',
+              sport: profile.sport || '',
+              avatar_url: profile.avatar_url || ''
+            });
+          }
+        } else {
+          console.warn('⚠️ No user found - might not be authenticated');
+        }
+      } catch (error) {
+        console.error('Load user error:', error);
+      } finally {
+        if (isMounted) {
+          console.log('✅ Loading complete');
+          setInitialLoading(false);
         }
       }
     }
-    loadUser();
+    
+    // Add a small delay to prevent rapid re-renders in dev mode
+    const delayedLoad = setTimeout(() => {
+      loadUser();
+    }, 100);
+    
+    return () => {
+      isMounted = false;
+      clearTimeout(delayedLoad);
+      clearTimeout(authTimeout);
+    };
   }, [supabase]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -112,10 +182,30 @@ export default function MyProfileClient() {
     }
   }
 
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-background-subtle flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen bg-background-subtle flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ttOrange"></div>
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-2">Authentication Error</h1>
+          <p className="text-gray-600 mb-4">Unable to load user session. Please try refreshing the page.</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            Refresh Page
+          </button>
+        </div>
       </div>
     );
   }

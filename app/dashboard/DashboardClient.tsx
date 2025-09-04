@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import BookingRequestsList from "@/components/dashboard/BookingRequestsList";
 
 interface Booking {
   id: string;
@@ -63,6 +64,14 @@ export default function DashboardClient({
                 <h2 className="text-xl font-semibold text-neutral-text">Quick Links</h2>
               </CardHeader>
               <CardBody className="space-y-4">
+                <Button variant="outline" asChild className="w-full justify-start">
+                  <Link href="/dashboard/requests">
+                    <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Your Requests
+                  </Link>
+                </Button>
                 <Button variant="outline" asChild className="w-full justify-start">
                   <Link href="/my-profile">
                     <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -239,10 +248,38 @@ export default function DashboardClient({
           )}
         </div>
 
+        {/* Booking Requests (for coaches) */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-semibold text-neutral-text mb-4">Pending Requests</h2>
+          
+          <BookingRequestsList 
+            coachId={coach.id}
+            onRequestUpdate={() => {
+              // You can add any additional refresh logic here if needed
+              console.log('Request updated, dashboard notified');
+            }}
+          />
+        </div>
+
         {/* Quick Actions */}
         <div>
           <h2 className="text-2xl font-semibold text-neutral-text mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="hover:shadow-brand-md transition-shadow group">
+              <CardBody className="p-6 text-center">
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-green-200 transition-colors">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.959 8.959 0 01-4.906-1.476L3 21l1.476-5.094A8.959 8.959 0 013 12c0-4.418 3.582-8 8-8s8 3.582 8 8z" />
+                  </svg>
+                </div>
+                <h3 className="font-semibold text-neutral-text mb-2">Messages</h3>
+                <p className="text-sm text-neutral-text-muted mb-4">View conversations with athletes</p>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/messages">View</Link>
+                </Button>
+              </CardBody>
+            </Card>
+
             <Card className="hover:shadow-brand-md transition-shadow group">
               <CardBody className="p-6 text-center">
                 <div className="w-12 h-12 bg-brand-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-brand-primary/20 transition-colors">
