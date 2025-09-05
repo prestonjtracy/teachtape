@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import { z } from "zod";
 import { sendBookingRequestEmailsAsync } from "@/lib/email";
+import { createMeeting } from "@/lib/zoom/api";
 
 const AcceptRequestSchema = z.object({
   id: z.string().uuid("Invalid request ID"),
@@ -237,6 +238,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     console.log('✅ [POST /api/requests/accept] Payment successful, creating booking');
 
+    // Create Zoom meeting for the session
+    let zoomJoinUrl: string | null = null;
+    let zoomStartUrl: string | null = null;
+    
+    try {
+      console.log('🎥 [POST /api/requests/accept] Creating Zoom meeting...');
+      const meetingDetails = await createMeeting({
+        topic: `TeachTape Session: ${bookingRequest.listing.title}`,
+        start_time: bookingRequest.proposed_start,
+        duration: bookingRequest.listing.duration_minutes || 60,
+        coach_email: user.email!,
+        athlete_name: bookingRequest.athlete.full_name || 'Athlete',
+      });
+      
+      zoomJoinUrl = meetingDetails.join_url;
+      zoomStartUrl = meetingDetails.host_join_url;
+      
+      console.log('✅ [POST /api/requests/accept] Zoom meeting created:', meetingDetails.id);
+    } catch (zoomError) {
+      console.error('❌ [POST /api/requests/accept] Zoom meeting creation failed:', zoomError);
+      // Don't fail the booking if Zoom fails - just log the error
+      // The booking will be created without Zoom links
+    }
+
     // Create booking record (reuse webhook logic structure)
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
@@ -252,6 +277,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         starts_at: bookingRequest.proposed_start,
         ends_at: bookingRequest.proposed_end,
         stripe_session_id: null, // No session for off-session payments
+        zoom_join_url: zoomJoinUrl,
+        zoom_start_url: zoomStartUrl,
       })
       .select('id')
       .single();
@@ -276,7 +303,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // Send system message to conversation
-    const systemMessage = "✅ Booking accepted! Payment processing...";
+    let systemMessage = "✅ Booking accepted! Payment processed successfully.";
+    
+    // Add Zoom meeting info if available
+    if (zoomJoinUrl) {
+      const sessionDate = new Date(bookingRequest.proposed_start).toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: bookingRequest.timezone,
+      });
+      
+      systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate}\n\n**For Athlete:** Join Meeting\n${zoomJoinUrl}\n\n**For Coach:** Start Meeting\n${zoomStartUrl}`;
+    }
+
     const { error: messageError } = await supabase
       .from('messages')
       .insert({

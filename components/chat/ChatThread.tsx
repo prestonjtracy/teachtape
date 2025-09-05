@@ -124,6 +124,29 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
     return message.kind === 'booking_request' || message.kind === 'system';
   };
 
+  const renderZoomLinks = (messageBody: string) => {
+    // Check if message contains Zoom links
+    const zoomJoinPattern = /(https:\/\/[a-zA-Z0-9.-]+\.zoom\.us\/j\/\d+[^\s]*)/g;
+    const parts = messageBody.split(zoomJoinPattern);
+    
+    return parts.map((part, index) => {
+      if (part.match(zoomJoinPattern)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors mt-2 mr-2"
+          >
+            🎥 Join Zoom Meeting
+          </a>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -181,8 +204,10 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
 
             {isSystem ? (
               <div className="flex justify-center my-3">
-                <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-2 rounded-full max-w-md text-center">
-                  {message.body}
+                <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-2 rounded-xl max-w-2xl">
+                  <div className="whitespace-pre-wrap break-words">
+                    {renderZoomLinks(message.body)}
+                  </div>
                 </div>
               </div>
             ) : (

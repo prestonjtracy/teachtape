@@ -85,25 +85,25 @@ export default function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-lg shadow-black/5">
+    <header className="relative z-50 bg-white border-b border-gray-200">
       <div className="w-full px-6 md:px-8">
-        <div className="grid grid-cols-3 items-center h-24 w-full">
-          {/* Logo - Left Column */}
-          <div className="flex justify-start">
-            <Link href="/" className="flex items-center py-4">
+        <div className="flex items-center justify-between h-16 w-full">
+          {/* Logo - Left Side */}
+          <div className="flex items-center">
+            <Link href="/" className="flex items-center">
               <Image
                 src="/teachtape-logo-full.png"
                 alt="TeachTape"
-                width={400}
-                height={100}
+                width={200}
+                height={60}
                 priority
-                className="h-12 w-auto sm:h-14 sm:w-auto md:h-16 md:w-auto lg:h-18 lg:w-auto hover:scale-105 transition-transform duration-200"
+                className="h-10 w-auto hover:scale-105 transition-transform duration-200"
               />
             </Link>
           </div>
 
-          {/* Desktop Navigation - Center Column */}
-          <nav className="hidden md:flex items-center justify-center space-x-8">
+          {/* Desktop Navigation - Center */}
+          <nav className="hidden md:flex items-center space-x-8">
             <Link 
               href="/" 
               className="text-gray-700 hover:text-ttBlue font-semibold text-lg px-4 py-2 transition-all duration-200 hover:scale-105 relative after:absolute after:bottom-[-4px] after:left-0 after:w-0 after:h-0.5 after:bg-ttOrange after:transition-all after:duration-200 hover:after:w-full"
@@ -124,10 +124,18 @@ export default function Header() {
                 Dashboard
               </Link>
             )}
+            {user && profile?.role === 'admin' && (
+              <Link 
+                href="/admin" 
+                className="text-gray-700 hover:text-ttBlue font-semibold text-lg px-4 py-2 transition-all duration-200 hover:scale-105 relative after:absolute after:bottom-[-4px] after:left-0 after:w-0 after:h-0.5 after:bg-red-500 after:transition-all after:duration-200 hover:after:w-full"
+              >
+                Admin Panel
+              </Link>
+            )}
           </nav>
 
-          {/* Desktop Auth Controls - Right Column */}
-          <div className="hidden md:flex items-center justify-end space-x-3">
+          {/* Desktop Auth Controls - Right Side */}
+          <div className="hidden md:flex items-center space-x-3">
             {loading ? (
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-primary border-t-transparent"></div>
             ) : user ? (
@@ -184,6 +192,18 @@ export default function Header() {
                       >
                         My Listings
                       </Link>
+                      {profile?.role === 'admin' && (
+                        <>
+                          <hr className="my-1 border-gray-200" />
+                          <Link
+                            href="/admin"
+                            className="block px-4 py-2 text-sm text-red-600 font-medium hover:bg-red-50 transition-colors"
+                            onClick={() => setShowUserMenu(false)}
+                          >
+                            🔧 Admin Panel
+                          </Link>
+                        </>
+                      )}
                       <hr className="my-1 border-gray-200" />
                       <button
                         onClick={signOut}
@@ -213,8 +233,8 @@ export default function Header() {
             )}
           </div>
 
-          {/* Mobile menu button */}
-          <div className="md:hidden">
+          {/* Mobile menu button - Right Side */}
+          <div className="md:hidden flex items-center">
             <button
               onClick={() => setShowMobileMenu(!showMobileMenu)}
               className="p-2.5 rounded-full text-gray-700 hover:bg-gray-100 hover:text-ttBlue transition-all duration-200"
@@ -271,6 +291,15 @@ export default function Header() {
                   >
                     My Listings
                   </Link>
+                  {profile?.role === 'admin' && (
+                    <Link 
+                      href="/admin" 
+                      className="block px-6 py-3 text-red-600 hover:text-red-700 hover:bg-red-50 font-semibold transition-all duration-200 rounded-lg mx-3"
+                      onClick={() => setShowMobileMenu(false)}
+                    >
+                      🔧 Admin Panel
+                    </Link>
+                  )}
                   <div className="border-t border-gray-100 mt-4 pt-4">
                     <button
                       onClick={() => {

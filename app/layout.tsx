@@ -20,9 +20,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <TestModeBanner isTestMode={isTestMode} />
-        <div style={{ 
-          marginTop: isTestMode ? '44px' : '0',
-          minHeight: '100vh'
+        <div className="min-h-screen" style={{
+          paddingTop: isTestMode ? '44px' : '0'
         }}>
           <Header />
           {children}

@@ -98,7 +98,7 @@ export default async function CoachesPage() {
           {/* Coaches Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {profiles.map((profile: Profile) => (
-              <Card key={profile.id} className="hover:shadow-brand-md transition-shadow group">
+              <Card key={profile.id} className="hover:shadow-brand-md transition-shadow group flex flex-col h-full">
                 <CardHeader className="pb-4">
                   <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 bg-brand-primary rounded-full flex items-center justify-center text-white font-semibold">
@@ -126,27 +126,29 @@ export default async function CoachesPage() {
                   </div>
                 </CardHeader>
 
-                <CardBody className="space-y-4">
-                  {profile.bio && (
-                    <p className="text-neutral-text-secondary text-sm line-clamp-2">
-                      {profile.bio}
-                    </p>
-                  )}
-                  
-                  <div className="flex justify-between items-center">
-                    <div className="text-sm text-neutral-text-muted">
-                      {profile.listings?.length || 0} active listing{profile.listings?.length !== 1 ? 's' : ''}
-                    </div>
-                    {profile.listings && profile.listings.length > 0 && (
-                      <div className="text-lg font-semibold text-brand-primary">
-                        From ${Math.min(...profile.listings.map(l => l.price_cents)) / 100}
-                      </div>
+                <CardBody className="flex-1 flex flex-col">
+                  <div className="flex-1 space-y-4">
+                    {profile.bio && (
+                      <p className="text-neutral-text-secondary text-sm line-clamp-3">
+                        {profile.bio}
+                      </p>
                     )}
+                    
+                    <div className="flex justify-between items-center">
+                      <div className="text-sm text-neutral-text-muted">
+                        {profile.listings?.length || 0} active listing{profile.listings?.length !== 1 ? 's' : ''}
+                      </div>
+                      {profile.listings && profile.listings.length > 0 && (
+                        <div className="text-lg font-semibold text-brand-primary">
+                          From ${Math.min(...profile.listings.map(l => l.price_cents)) / 100}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <Button
                     variant="outline"
-                    className="w-full group-hover:bg-brand-primary group-hover:text-white group-hover:border-brand-primary"
+                    className="w-full group-hover:bg-brand-primary group-hover:text-white group-hover:border-brand-primary mt-4"
                     asChild
                   >
                     <Link href={`/coaches/${profile.id}`}>
