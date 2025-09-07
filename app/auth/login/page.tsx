@@ -13,6 +13,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const next = searchParams.get('next') || '/dashboard';
   const message = searchParams.get('message');
+  const error = searchParams.get('error');
   const supabase = createClient();
 
   // Forgot password modal state
@@ -101,6 +102,22 @@ export default function LoginPage() {
         {message && (
           <div className="p-4 bg-green-50 border border-green-200 rounded-md">
             <p className="text-green-600 text-sm text-center">{message}</p>
+          </div>
+        )}
+        
+        {error === 'reset_expired' && (
+          <div className="p-4 bg-orange-50 border border-orange-200 rounded-md">
+            <p className="text-orange-700 text-sm text-center">
+              Your password reset link has expired. Please request a new one below.
+            </p>
+          </div>
+        )}
+        
+        {error === 'expired_link' && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-red-700 text-sm text-center">
+              The authentication link has expired. Please try signing in again.
+            </p>
           </div>
         )}
         <div className="bg-white p-8 rounded-brand shadow-brand-md border border-gray-100">

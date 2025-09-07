@@ -109,15 +109,15 @@ export default async function DashboardPage() {
       console.error('Failed to check Stripe account status:', error);
       stripeAccountStatus.needsOnboarding = true;
     }
-  } else if (coach?.stripe_account_id) {
-    // Has account ID but can't check status
+  } else if (coach) {
+    // Coach exists but no Stripe account ID
     stripeAccountStatus.needsOnboarding = true;
   }
 
   return (
     <DashboardClient
       coach={{
-        id: coach?.id || '',
+        id: profile.id, // Use profile.id as the coach_id for booking requests
         profile_id: profile.id,
         full_name: profile.full_name
       }}

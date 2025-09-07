@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import { z } from "zod";
 import { sendBookingRequestEmailsAsync } from "@/lib/email";
@@ -93,8 +93,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .eq('profile_id', coachProfile.id)
       .single();
 
+    console.log('🔍 [POST /api/requests/accept] Coach data lookup:', {
+      coachProfileId: coachProfile.id,
+      coachData: coachData,
+      coachError: coachError,
+      hasStripeAccount: !!coachData?.stripe_account_id
+    });
+
     if (coachError || !coachData?.stripe_account_id) {
-      console.error('❌ [POST /api/requests/accept] Coach Stripe account not found:', coachError);
+      console.error('❌ [POST /api/requests/accept] Coach Stripe account not found:', {
+        coachError,
+        coachData,
+        stripeAccountId: coachData?.stripe_account_id
+      });
       return NextResponse.json(
         { error: "Coach payment setup incomplete" },
         { status: 400 }
@@ -115,12 +126,53 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       coach_account: coachStripeAccountId
     });
 
+    // Get or create Stripe Customer for the athlete
+    let customerId: string;
+    
+    // Try to find existing customer by email
+    const existingCustomers = await stripe.customers.list({
+      email: bookingRequest.athlete.email,
+      limit: 1,
+    });
+    
+    if (existingCustomers.data.length > 0) {
+      customerId = existingCustomers.data[0].id;
+      console.log('✅ [POST /api/requests/accept] Found existing customer:', customerId);
+    } else {
+      // Create new customer
+      const customer = await stripe.customers.create({
+        email: bookingRequest.athlete.email,
+        name: bookingRequest.athlete.full_name,
+        metadata: {
+          athlete_id: bookingRequest.athlete_id,
+        },
+      });
+      customerId = customer.id;
+      console.log('✅ [POST /api/requests/accept] Created new customer:', customerId);
+    }
+
+    // Attach the payment method to the customer
+    try {
+      await stripe.paymentMethods.attach(bookingRequest.payment_method_id, {
+        customer: customerId,
+      });
+      console.log('✅ [POST /api/requests/accept] Payment method attached to customer');
+    } catch (attachError: any) {
+      // If already attached, that's fine - continue
+      if (attachError.code !== 'resource_already_exists') {
+        console.error('❌ [POST /api/requests/accept] Failed to attach payment method:', attachError);
+        throw attachError;
+      }
+      console.log('✅ [POST /api/requests/accept] Payment method already attached to customer');
+    }
+
     // Create PaymentIntent with Stripe Connect
     let paymentIntent: Stripe.PaymentIntent;
     try {
       paymentIntent = await stripe.paymentIntents.create({
         amount: listingPrice,
         currency: 'usd',
+        customer: customerId,
         payment_method: bookingRequest.payment_method_id,
         confirmation_method: 'manual',
         confirm: true,
@@ -129,13 +181,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         transfer_data: {
           destination: coachStripeAccountId,
         },
-        on_behalf_of: coachStripeAccountId, // For compliance
+        // Removed on_behalf_of to avoid card_payments capability requirement
         metadata: {
           booking_request_id: requestId,
           listing_id: bookingRequest.listing_id,
           coach_id: bookingRequest.coach_id,
           athlete_id: bookingRequest.athlete_id,
           coach_stripe_account: coachStripeAccountId,
+          customer_id: customerId,
         },
         description: `TeachTape: ${bookingRequest.listing.title}`,
       });
@@ -262,29 +315,40 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // The booking will be created without Zoom links
     }
 
-    // Create booking record (reuse webhook logic structure)
-    const { data: booking, error: bookingError } = await supabase
+    // Create booking record using admin client to bypass RLS
+    const adminClient = createAdminClient();
+    const { data: booking, error: bookingError } = await adminClient
       .from('bookings')
       .insert({
-        payment_intent_id: paymentIntent.id,
         listing_id: bookingRequest.listing_id,
         coach_id: bookingRequest.coach_id,
         customer_email: bookingRequest.athlete.email,
-        athlete_email: bookingRequest.athlete.email,
-        athlete_name: bookingRequest.athlete.full_name,
         amount_paid_cents: bookingRequest.listing.price_cents,
-        status: 'confirmed',
+        status: 'paid', // Use 'paid' status as per original schema
         starts_at: bookingRequest.proposed_start,
         ends_at: bookingRequest.proposed_end,
-        stripe_session_id: null, // No session for off-session payments
-        zoom_join_url: zoomJoinUrl,
-        zoom_start_url: zoomStartUrl,
+        stripe_session_id: paymentIntent.id, // Use payment_intent_id as session_id for Connect payments
       })
       .select('id')
       .single();
 
     if (bookingError) {
-      console.error('❌ [POST /api/requests/accept] Booking creation failed:', bookingError);
+      console.error('❌ [POST /api/requests/accept] Booking creation failed:', {
+        error: bookingError,
+        errorMessage: bookingError.message,
+        errorCode: bookingError.code,
+        errorDetails: bookingError.details,
+        bookingData: {
+          listing_id: bookingRequest.listing_id,
+          coach_id: bookingRequest.coach_id,
+          customer_email: bookingRequest.athlete.email,
+          amount_paid_cents: bookingRequest.listing.price_cents,
+          status: 'paid',
+          starts_at: bookingRequest.proposed_start,
+          ends_at: bookingRequest.proposed_end,
+          stripe_session_id: paymentIntent.id,
+        }
+      });
       return NextResponse.json(
         { error: "Failed to create booking" },
         { status: 500 }
@@ -292,7 +356,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // Update booking request status
-    const { error: updateError } = await supabase
+    const { error: updateError } = await adminClient
       .from('booking_requests')
       .update({ status: 'accepted' })
       .eq('id', requestId);
@@ -320,7 +384,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate}\n\n**For Athlete:** Join Meeting\n${zoomJoinUrl}\n\n**For Coach:** Start Meeting\n${zoomStartUrl}`;
     }
 
-    const { error: messageError } = await supabase
+    const { error: messageError } = await adminClient
       .from('messages')
       .insert({
         conversation_id: bookingRequest.conversation_id,

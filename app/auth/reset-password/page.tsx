@@ -96,7 +96,17 @@ export default function ResetPasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('🔒 [RESET PASSWORD] Form submitted');
+    console.log('🔒 [RESET PASSWORD] Form data:', { 
+      password: formData.password ? '[hidden]' : 'empty',
+      confirmPassword: formData.confirmPassword ? '[hidden]' : 'empty',
+      passwordLength: formData.password.length,
+      confirmLength: formData.confirmPassword.length
+    });
+    
     if (!validateForm()) {
+      console.log('❌ [RESET PASSWORD] Form validation failed');
+      console.log('❌ [RESET PASSWORD] Form errors:', formErrors);
       return;
     }
 
@@ -104,23 +114,46 @@ export default function ResetPasswordPage() {
     setError('');
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      console.log('🔒 [RESET PASSWORD] Attempting to update password...');
+      
+      // First check if we have a valid session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      console.log('🔒 [RESET PASSWORD] Current session:', { 
+        hasSession: !!sessionData.session,
+        sessionError: sessionError?.message 
+      });
+      
+      if (!sessionData.session) {
+        throw new Error('No active session found. Please request a new password reset link.');
+      }
+      
+      // Add a timeout to prevent hanging
+      const updatePromise = supabase.auth.updateUser({
         password: formData.password
       });
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Password update timed out. Please try again.')), 10000)
+      );
+      
+      const { error } = await Promise.race([updatePromise, timeoutPromise]) as any;
 
       if (error) {
+        console.error('❌ [RESET PASSWORD] Update failed:', error);
         throw error;
       }
 
+      console.log('✅ [RESET PASSWORD] Password updated successfully');
       setSuccess(true);
       
-      // Redirect to dashboard after 2 seconds
+      // Redirect to login after 2 seconds (better UX for password reset)
       setTimeout(() => {
-        router.push('/dashboard?message=Password updated successfully');
+        console.log('🔄 [RESET PASSWORD] Redirecting to login...');
+        router.push('/auth/login?message=Password updated successfully. Please sign in with your new password.');
       }, 2000);
 
     } catch (err: any) {
-      console.error('Password update error:', err);
+      console.error('❌ [RESET PASSWORD] Password update error:', err);
       setError(err.message || 'Failed to update password. Please try again.');
     } finally {
       setLoading(false);
@@ -291,6 +324,7 @@ export default function ResetPasswordPage() {
               <button
                 type="submit"
                 disabled={loading}
+                onClick={() => console.log('🔒 [RESET PASSWORD] Button clicked!')}
                 className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? (

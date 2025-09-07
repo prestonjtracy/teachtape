@@ -56,6 +56,8 @@ export default function BookingRequestsList({ coachId, onRequestUpdate }: Bookin
 
   async function fetchRequests() {
     try {
+      console.log('🔍 [BookingRequestsList] Fetching requests for coach ID:', coachId);
+      
       const { data, error } = await supabase
         .from('booking_requests')
         .select(`
@@ -81,10 +83,12 @@ export default function BookingRequestsList({ coachId, onRequestUpdate }: Bookin
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching requests:', error);
+        console.error('❌ [BookingRequestsList] Error fetching requests:', error);
         setError('Failed to load booking requests');
         return;
       }
+
+      console.log('✅ [BookingRequestsList] Successfully fetched', data?.length || 0, 'requests');
 
       // Fetch last message for each request
       const requestsWithMessages = await Promise.all(

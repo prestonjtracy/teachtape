@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { createServerClient } from "@/supabase/server";
+import { createClient } from '@/lib/supabase/server';
 
 /**
  * Handles Stripe Connect Express onboarding for coaches.
@@ -7,13 +7,19 @@ import { createServerClient } from "@/supabase/server";
  * Creates a Stripe Express account, stores it in the coaches table,
  * and returns an onboarding link.
  */
-export async function POST() {
-  console.log("Stripe Connect coach onboarding route started");
+export async function POST(request: Request) {
+  console.log("🚀 [Stripe Connect] Route started - updated");
 
   try {
     // Verify required environment variables
     const secretKey = process.env.STRIPE_SECRET_KEY;
+    console.log("🔑 [Stripe Connect] Environment check:", { 
+      hasStripeKey: !!secretKey,
+      appUrl: process.env.APP_URL || 'not set'
+    });
+    
     if (!secretKey) {
+      console.log("❌ [Stripe Connect] Missing STRIPE_SECRET_KEY");
       return new Response(
         JSON.stringify({ error: "Missing STRIPE_SECRET_KEY" }),
         {
@@ -35,10 +41,16 @@ export async function POST() {
     }
 
     // Initialize Supabase and get current user
-    const supabase = createServerClient();
+    const supabase = createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
+    console.log('🔍 [Stripe Connect] Auth check:', { 
+      user: user ? user.id : null, 
+      authError: authError?.message 
+    });
+    
     if (authError || !user) {
+      console.log('❌ [Stripe Connect] Authentication failed');
       return new Response(
         JSON.stringify({ error: "Authentication required" }),
         {
@@ -126,7 +138,11 @@ export async function POST() {
     if (!stripeAccountId) {
       const account = await stripe.accounts.create({ 
         type: "express",
-        country: 'US' // You might want to make this configurable
+        country: 'US', // You might want to make this configurable
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true }
+        }
       });
       
       stripeAccountId = account.id;
@@ -152,9 +168,9 @@ export async function POST() {
     }
 
     // Check if account setup is complete
-    const account = await stripe.accounts.retrieve(stripeAccountId);
+    const retrievedAccount = await stripe.accounts.retrieve(stripeAccountId);
     
-    if (account.charges_enabled) {
+    if (retrievedAccount.charges_enabled) {
       // Account is already fully set up
       return new Response(
         JSON.stringify({ 
@@ -203,9 +219,9 @@ export async function POST() {
     );
 
   } catch (error: any) {
-    console.error('Stripe Connect error:', error);
+    console.error('❌ [Stripe Connect] Unexpected error:', error);
     return new Response(
-      JSON.stringify({ error: "Internal server error" }),
+      JSON.stringify({ error: "Internal server error", details: error.message }),
       {
         status: 500,
         headers: { "Content-Type": "application/json" },
