@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import CoachDashboard from "@/components/dashboard/CoachDashboard";
 import BookingRequestsList from "@/components/dashboard/BookingRequestsList";
 
 interface Booking {
@@ -39,76 +38,20 @@ interface Coach {
   full_name: string | null;
 }
 
-interface DashboardClientProps {
-  coach?: Coach;
-  bookings?: Booking[];
-  earningsSummary?: EarningsSummary;
-  stripeAccountStatus?: StripeAccountStatus;
+interface CoachDashboardProps {
+  coach: Coach;
+  bookings: Booking[];
+  earningsSummary: EarningsSummary;
+  stripeAccountStatus: StripeAccountStatus;
 }
 
-export default function DashboardClient({ 
+export default function CoachDashboard({ 
   coach, 
   bookings = [], 
   earningsSummary, 
   stripeAccountStatus 
-}: DashboardClientProps) {
+}: CoachDashboardProps) {
   
-  // Coach dashboard
-  if (coach && earningsSummary && stripeAccountStatus) {
-    return (
-      <CoachDashboard
-        coach={coach}
-        bookings={bookings}
-        earningsSummary={earningsSummary}
-        stripeAccountStatus={stripeAccountStatus}
-      />
-    );
-  }
-  
-  // Simple dashboard for non-coaches
-  if (!coach || !earningsSummary) {
-    return (
-      <div className="min-h-screen bg-background-subtle">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <h1 className="text-4xl font-bold text-neutral-text mb-8">Dashboard</h1>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <h2 className="text-xl font-semibold text-neutral-text">Quick Links</h2>
-              </CardHeader>
-              <CardBody className="space-y-4">
-                <Button variant="outline" asChild className="w-full justify-start">
-                  <Link href="/dashboard/requests">
-                    <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Your Requests
-                  </Link>
-                </Button>
-                <Button variant="outline" asChild className="w-full justify-start">
-                  <Link href="/my-profile">
-                    <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    My Profile
-                  </Link>
-                </Button>
-                <Button variant="outline" asChild className="w-full justify-start">
-                  <Link href="/coaches">
-                    <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    Browse Coaches
-                  </Link>
-                </Button>
-              </CardBody>
-            </Card>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString();
   const formatDateTime = (dateString: string) => new Date(dateString).toLocaleString();
@@ -141,7 +84,10 @@ export default function DashboardClient({
 
         {/* Stripe Onboarding Banner */}
         {stripeAccountStatus?.needsOnboarding && (
-          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-brand mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div 
+            className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-brand mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+            data-testid="stripe-onboarding-banner"
+          >
             <div>
               <div className="flex items-center">
                 <svg className="h-5 w-5 text-yellow-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,8 +108,8 @@ export default function DashboardClient({
         {/* Earnings Summary */}
         <div className="mb-8">
           <h2 className="text-2xl font-semibold text-neutral-text mb-4">Earnings Summary</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="text-center">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="earnings-kpi-cards">
+            <Card className="text-center" data-testid="last-7-days-card">
               <CardBody className="p-6">
                 <div className="text-3xl font-bold text-green-600 mb-2">
                   {formatCurrency(earningsSummary.last7Days)}
@@ -172,7 +118,7 @@ export default function DashboardClient({
               </CardBody>
             </Card>
             
-            <Card className="text-center">
+            <Card className="text-center" data-testid="month-to-date-card">
               <CardBody className="p-6">
                 <div className="text-3xl font-bold text-brand-primary mb-2">
                   {formatCurrency(earningsSummary.monthToDate)}
@@ -181,7 +127,7 @@ export default function DashboardClient({
               </CardBody>
             </Card>
             
-            <Card className="text-center">
+            <Card className="text-center" data-testid="all-time-card">
               <CardBody className="p-6">
                 <div className="text-3xl font-bold text-brand-secondary mb-2">
                   {formatCurrency(earningsSummary.allTime)}
