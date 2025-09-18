@@ -14,68 +14,110 @@ export default function Header() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const supabase = createClient();
 
+  // Hard timeout to prevent infinite loading
+  useEffect(() => {
+    const hardTimeout = setTimeout(() => {
+      console.log('🚨 [Header] Hard timeout reached - forcing loading to false');
+      setLoading(false);
+    }, 1000);
+
+    return () => clearTimeout(hardTimeout);
+  }, []);
+
   useEffect(() => {
     async function getUser() {
       try {
+        console.log('🔍 [Header] Starting auth check...');
         const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error) {
+          console.error('❌ [Header] Auth error:', error);
+        }
+        
+        console.log('👤 [Header] User:', user ? 'authenticated' : 'not authenticated');
         setUser(user);
         
         if (user) {
-          // Fetch profile data including avatar_url
+          // Fetch profile data
           try {
-            const { data: profileData } = await supabase
+            const { data: profileData, error: profileError } = await supabase
               .from('profiles')
-              .select('id, full_name, avatar_url, role')
-              .eq('id', user.id)
+              .select('id, full_name, avatar_url, role, auth_user_id')
+              .eq('auth_user_id', user.id)
               .single();
-            setProfile(profileData);
+            
+            if (profileError && profileError.code !== 'PGRST116') {
+              console.error('❌ [Header] Profile fetch error:', profileError);
+            } else {
+              console.log('✅ [Header] Profile loaded:', profileData?.full_name || 'No name', 'Role:', profileData?.role);
+              setProfile(profileData);
+            }
           } catch (profileError) {
-            // Profile fetch failed, use fallback
+            console.error('❌ [Header] Profile fetch failed:', profileError);
           }
         }
         
         setLoading(false);
+        console.log('✅ [Header] Auth check complete, loading set to false');
       } catch (error) {
-        console.error('❌ [Header] Error fetching user:', error);
+        console.error('❌ [Header] Network error fetching user:', error);
         setLoading(false);
       }
     }
 
-    // Set a timeout to prevent infinite loading
+    // Set a backup timeout to prevent infinite loading
     const timeout = setTimeout(() => {
+      console.log('⏰ [Header] Backup timeout reached, forcing loading to false');
       setLoading(false);
-    }, 3000);
+    }, 500);
 
     getUser();
 
+    // Listen for profile updates using a custom event
+    const handleProfileUpdate = () => {
+      console.log('🔄 [Header] Profile update event received, refreshing...');
+      getUser();
+    };
+    
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('🔄 [Header] Auth state changed:', event, session?.user ? 'user present' : 'no user');
         clearTimeout(timeout);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Fetch profile data including avatar_url
+          // Fetch profile data
           try {
-            const { data: profileData } = await supabase
+            const { data: profileData, error: profileError } = await supabase
               .from('profiles')
-              .select('id, full_name, avatar_url, role')
-              .eq('id', session.user.id)
+              .select('id, full_name, avatar_url, role, auth_user_id')
+              .eq('auth_user_id', session.user.id)
               .single();
-            setProfile(profileData);
+            
+            if (profileError && profileError.code !== 'PGRST116') {
+              console.error('❌ [Header] Auth change profile error:', profileError);
+            } else {
+              console.log('✅ [Header] Auth change profile loaded:', profileData?.full_name || 'No name', 'Role:', profileData?.role);
+              setProfile(profileData);
+            }
           } catch (profileError) {
-            // Profile fetch failed in auth change, use fallback
+            console.error('❌ [Header] Auth change profile fetch failed:', profileError);
           }
         } else {
           setProfile(null);
         }
         
         setLoading(false);
+        console.log('✅ [Header] Auth state change complete, loading set to false');
       }
     );
 
     return () => {
       clearTimeout(timeout);
       subscription.unsubscribe();
+      window.removeEventListener('profileUpdated', handleProfileUpdate);
     };
   }, [supabase]);
 
@@ -87,7 +129,7 @@ export default function Header() {
   return (
     <header className="relative z-50 bg-white border-b border-gray-200">
       <div className="w-full px-6 md:px-8">
-        <div className="flex items-center justify-between h-16 w-full">
+        <div className="relative flex items-center h-16 w-full">
           {/* Logo - Left Side */}
           <div className="flex items-center">
             <Link href="/" className="flex items-center">
@@ -102,8 +144,8 @@ export default function Header() {
             </Link>
           </div>
 
-          {/* Desktop Navigation - Center */}
-          <nav className="hidden md:flex items-center space-x-8">
+          {/* Desktop Navigation - Absolute Center */}
+          <nav className="hidden md:flex items-center space-x-8 absolute left-1/2 transform -translate-x-1/2">
             <Link 
               href="/" 
               className="text-gray-700 hover:text-ttBlue font-semibold text-lg px-4 py-2 transition-all duration-200 hover:scale-105 relative after:absolute after:bottom-[-4px] after:left-0 after:w-0 after:h-0.5 after:bg-ttOrange after:transition-all after:duration-200 hover:after:w-full"
@@ -135,9 +177,12 @@ export default function Header() {
           </nav>
 
           {/* Desktop Auth Controls - Right Side */}
-          <div className="hidden md:flex items-center space-x-3">
+          <div className="hidden md:flex items-center space-x-3 ml-auto">
             {loading ? (
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-primary border-t-transparent"></div>
+              <div className="flex items-center space-x-2">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-primary border-t-transparent"></div>
+                <span className="text-xs text-gray-500">Loading...</span>
+              </div>
             ) : user ? (
               <div className="relative">
                 <button
@@ -153,6 +198,9 @@ export default function Header() {
                         height={32}
                         className="h-full w-full object-cover"
                         unoptimized={true}
+                        onError={() => {
+                          console.error('❌ [Header] Avatar image failed to load:', profile.avatar_url);
+                        }}
                       />
                     </div>
                   ) : (
@@ -185,13 +233,23 @@ export default function Header() {
                       >
                         My Profile
                       </Link>
-                      <Link
-                        href="/my-listings"
-                        className="block px-4 py-2 text-sm text-neutral-text hover:bg-background-subtle transition-colors"
-                        onClick={() => setShowUserMenu(false)}
-                      >
-                        My Listings
-                      </Link>
+                      {profile?.role === 'coach' ? (
+                        <Link
+                          href="/my-listings"
+                          className="block px-4 py-2 text-sm text-neutral-text hover:bg-background-subtle transition-colors"
+                          onClick={() => setShowUserMenu(false)}
+                        >
+                          My Listings
+                        </Link>
+                      ) : (
+                        <Link
+                          href="/messages"
+                          className="block px-4 py-2 text-sm text-neutral-text hover:bg-background-subtle transition-colors"
+                          onClick={() => setShowUserMenu(false)}
+                        >
+                          My Messages
+                        </Link>
+                      )}
                       {profile?.role === 'admin' && (
                         <>
                           <hr className="my-1 border-gray-200" />
@@ -284,13 +342,23 @@ export default function Header() {
                   >
                     My Profile
                   </Link>
-                  <Link 
-                    href="/my-listings" 
-                    className="block px-6 py-3 text-gray-700 hover:text-ttBlue hover:bg-gray-50 font-semibold transition-all duration-200 rounded-lg mx-3"
-                    onClick={() => setShowMobileMenu(false)}
-                  >
-                    My Listings
-                  </Link>
+                  {profile?.role === 'coach' ? (
+                    <Link 
+                      href="/my-listings" 
+                      className="block px-6 py-3 text-gray-700 hover:text-ttBlue hover:bg-gray-50 font-semibold transition-all duration-200 rounded-lg mx-3"
+                      onClick={() => setShowMobileMenu(false)}
+                    >
+                      My Listings
+                    </Link>
+                  ) : (
+                    <Link 
+                      href="/messages" 
+                      className="block px-6 py-3 text-gray-700 hover:text-ttBlue hover:bg-gray-50 font-semibold transition-all duration-200 rounded-lg mx-3"
+                      onClick={() => setShowMobileMenu(false)}
+                    >
+                      My Messages
+                    </Link>
+                  )}
                   {profile?.role === 'admin' && (
                     <Link 
                       href="/admin" 

@@ -138,7 +138,7 @@ export default function AvatarUploader({ value, onChange, userEmail }: AvatarUpl
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="bg-ttOrange text-white px-4 py-2 rounded-lg font-medium hover:bg-ttOrange/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            className="bg-ttOrange text-white px-4 py-2 rounded-lg font-medium hover:bg-ttOrange/90 hover:shadow-lg hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ttOrange focus:ring-offset-2"
           >
             {uploading ? 'Uploading...' : value ? 'Change Photo' : 'Upload Photo'}
           </button>

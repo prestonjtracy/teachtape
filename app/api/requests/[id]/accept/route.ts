@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClientForApiRoute, createAdminClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import { z } from "zod";
 import { sendBookingRequestEmailsAsync } from "@/lib/email";
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const validatedData = AcceptRequestSchema.parse(params);
     const requestId = validatedData.id;
 
-    const supabase = createClient();
+    const supabase = createClientForApiRoute(req);
 
     // Get current user (coach)
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -114,9 +114,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const coachStripeAccountId = coachData.stripe_account_id;
 
-    // Calculate application fee (5% of listing price)
+    // Calculate application fee using commission settings
     const listingPrice = bookingRequest.listing.price_cents;
-    const applicationFee = Math.round(listingPrice * 0.05); // 5% platform fee
+    
+    // Check feature flag
+    const useCommissionSettings = process.env.ENABLE_COMMISSION_SETTINGS !== 'false';
+    let applicationFee: number;
+    
+    if (useCommissionSettings) {
+      // Use dynamic commission settings
+      const { getActiveCommissionSettings, calcPlatformCutCents } = await import('@/lib/stripeFees');
+      const commissionSettings = await getActiveCommissionSettings();
+      applicationFee = calcPlatformCutCents(listingPrice, commissionSettings.platformCommissionPercentage);
+      
+      console.log('💰 [POST /api/requests/accept] Using commission settings:', {
+        platformCommission: `${commissionSettings.platformCommissionPercentage}%`,
+        applicationFee,
+        listingPrice
+      });
+    } else {
+      // Fall back to legacy 5% fee
+      applicationFee = Math.round(listingPrice * 0.05);
+      console.log('🚧 [POST /api/requests/accept] Using legacy 5% fee');
+    }
 
     console.log('✅ [POST /api/requests/accept] Processing Connect payment:', {
       request_id: requestId,
@@ -366,7 +386,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // Don't fail the whole request for this
     }
 
-    // Send system message to conversation
+    // Create structured system message for booking acceptance
+    const messageData = {
+      type: 'booking_accepted',
+      booking_id: booking.id,
+      starts_at: bookingRequest.proposed_start,
+      ends_at: bookingRequest.proposed_end,
+      timezone: bookingRequest.timezone,
+      listing_title: bookingRequest.listing.title,
+      athlete_join_url: zoomJoinUrl,
+      coach_start_url: zoomStartUrl,
+      amount_paid_cents: bookingRequest.listing.price_cents
+    };
+
+    // Create a fallback message for systems that don't support the new format
     let systemMessage = "✅ Booking accepted! Payment processed successfully.";
     
     // Add Zoom meeting info if available
@@ -381,7 +414,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         timeZone: bookingRequest.timezone,
       });
       
-      systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate}\n\n**For Athlete:** Join Meeting\n${zoomJoinUrl}\n\n**For Coach:** Start Meeting\n${zoomStartUrl}`;
+      systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate}\n\n**For Athlete:** [🎥 Join Meeting](${zoomJoinUrl})\n\n**For Coach:** [🎥 Start Meeting](${zoomStartUrl})`;
     }
 
     const { error: messageError } = await adminClient
@@ -390,13 +423,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         conversation_id: bookingRequest.conversation_id,
         sender_id: null, // System message
         body: systemMessage,
-        kind: 'system'
+        kind: 'booking_accepted',
+        metadata: messageData
       });
 
     if (messageError) {
       console.warn('⚠️ [POST /api/requests/accept] Failed to send system message:', messageError);
     } else {
-      console.log('✅ [POST /api/requests/accept] System message sent:', systemMessage);
+      console.log('✅ [POST /api/requests/accept] System message sent successfully');
     }
 
     console.log('✅ [POST /api/requests/accept] Request accepted successfully:', {

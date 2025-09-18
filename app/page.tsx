@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import Footer from "@/components/Footer";
 
 export default function Page() {
   return (
@@ -50,28 +51,6 @@ export default function Page() {
         </div>
       </section>
 
-      {/* Trusted By Section */}
-      <section className="py-16 px-4 bg-gray-50">
-        <div className="max-w-7xl mx-auto text-center">
-          <p className="text-gray-600 text-sm font-medium uppercase tracking-wider mb-8">
-            Trusted by athletes worldwide
-          </p>
-          <div className="flex justify-center items-center space-x-8 opacity-60">
-            <div className="h-12 w-24 bg-gray-300 rounded flex items-center justify-center text-sm font-medium">
-              Logo 1
-            </div>
-            <div className="h-12 w-24 bg-gray-300 rounded flex items-center justify-center text-sm font-medium">
-              Logo 2
-            </div>
-            <div className="h-12 w-24 bg-gray-300 rounded flex items-center justify-center text-sm font-medium">
-              Logo 3
-            </div>
-            <div className="h-12 w-24 bg-gray-300 rounded flex items-center justify-center text-sm font-medium">
-              Logo 4
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Value Props Section */}
       <section className="py-20 px-4">
@@ -94,7 +73,7 @@ export default function Page() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-4">Verified Coaches</h3>
               <p className="text-gray-600">
-                All our coaches are thoroughly vetted professionals with proven track records and certifications.
+                Our coaches bring real playing and coaching experience to help athletes reach the next level.
               </p>
             </div>
 
@@ -126,7 +105,7 @@ export default function Page() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4 bg-blue-700 text-white">
+      <section className="py-20 px-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-6">
             Ready to Elevate Your Game?
@@ -136,12 +115,15 @@ export default function Page() {
           </p>
           <Link 
             href="/coaches"
-            className="inline-flex items-center justify-center px-8 py-4 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors"
+            className="inline-flex items-center justify-center px-8 py-4 bg-white text-orange-600 font-semibold rounded-lg hover:bg-gray-50 transition-colors"
           >
             Find Your Coach Today
           </Link>
         </div>
       </section>
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

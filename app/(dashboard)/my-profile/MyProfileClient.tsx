@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/client';
 import Toast from '@/components/Toast';
 import AvatarUploader from '@/components/AvatarUploader';
+import CoachGallery from '@/components/CoachGallery';
 
 interface Profile {
   id: string;
@@ -12,6 +13,11 @@ interface Profile {
   bio: string;
   sport: string;
   avatar_url: string;
+}
+
+interface MyProfileClientProps {
+  initialUser?: any;
+  initialProfile?: Profile | null;
 }
 
 const SPORTS_OPTIONS = [
@@ -30,17 +36,17 @@ const SPORTS_OPTIONS = [
   'Other'
 ];
 
-export default function MyProfileClient() {
-  const [profile, setProfile] = useState<Profile | null>(null);
+export default function MyProfileClient({ initialUser, initialProfile }: MyProfileClientProps) {
+  const [profile, setProfile] = useState<Profile | null>(initialProfile || null);
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [initialLoading, setInitialLoading] = useState(false);
+  const [user, setUser] = useState<any>(initialUser || null);
   const [formData, setFormData] = useState({
-    full_name: '',
-    role: 'coach',
-    bio: '',
-    sport: '',
-    avatar_url: ''
+    full_name: initialProfile?.full_name || '',
+    role: initialProfile?.role || 'coach',
+    bio: initialProfile?.bio || '',
+    sport: initialProfile?.sport || '',
+    avatar_url: initialProfile?.avatar_url || ''
   });
   const [toast, setToast] = useState<{show: boolean; message: string; type: 'success' | 'error'}>({
     show: false,
@@ -48,37 +54,23 @@ export default function MyProfileClient() {
     type: 'success'
   });
   
-  // Create Supabase client directly to bypass any config issues
-  const supabase = createBrowserClient(
-    'https://atjwhulpsbloxubpkjkl.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0andodWxwc2Jsb3h1YnBramtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxMDE4NTIsImV4cCI6MjA3MDY3Nzg1Mn0.A2-1tp06noivdE7ZReyPWv_1DYHTrbgbp_zrsj7jxbQ'
-  );
+  // Create Supabase client using the proper factory
+  const supabase = createClient();
 
+  // Only run auth check if we don't have initial data
   useEffect(() => {
+    if (initialUser && initialProfile !== undefined) {
+      // We already have data from server, no need to load again
+      return;
+    }
+
     let isMounted = true;
-    let authTimeout: NodeJS.Timeout;
 
     async function loadUser() {
       try {
         if (!isMounted) return;
         
-        console.log('🔍 Loading user...');
-        console.log('🔧 Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-        console.log('🔧 Supabase Anon Key exists:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-        
-        // Set a timeout for the auth request
-        authTimeout = setTimeout(() => {
-          console.error('❌ Auth request timed out after 5 seconds');
-          if (isMounted) {
-            setInitialLoading(false);
-          }
-        }, 5000);
-        
-        console.log('🔄 Making auth request...');
         const { data: { user }, error: authError } = await supabase.auth.getUser();
-        
-        // Clear timeout if request completed
-        clearTimeout(authTimeout);
         
         if (!isMounted) return;
         
@@ -88,12 +80,9 @@ export default function MyProfileClient() {
           return;
         }
         
-        console.log('👤 User loaded:', user?.email || 'No email');
-        console.log('👤 User ID:', user?.id || 'No ID');
         setUser(user);
         
         if (user) {
-          console.log('📝 Loading profile for user:', user.id);
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('*')
@@ -102,13 +91,8 @@ export default function MyProfileClient() {
           
           if (!isMounted) return;
           
-          if (profileError) {
+          if (profileError && profileError.code !== 'PGRST116') {
             console.error('Profile error:', profileError);
-            if (profileError.code === 'PGRST116') {
-              console.log('📝 No profile found, will show create form');
-            }
-          } else {
-            console.log('✅ Profile loaded:', profile?.full_name);
           }
           
           if (profile) {
@@ -121,61 +105,102 @@ export default function MyProfileClient() {
               avatar_url: profile.avatar_url || ''
             });
           }
-        } else {
-          console.warn('⚠️ No user found - might not be authenticated');
         }
       } catch (error) {
         console.error('Load user error:', error);
       } finally {
         if (isMounted) {
-          console.log('✅ Loading complete');
           setInitialLoading(false);
         }
       }
     }
     
-    // Add a small delay to prevent rapid re-renders in dev mode
-    const delayedLoad = setTimeout(() => {
+    if (!initialUser) {
+      setInitialLoading(true);
       loadUser();
-    }, 100);
+    }
     
     return () => {
       isMounted = false;
-      clearTimeout(delayedLoad);
-      clearTimeout(authTimeout);
     };
-  }, [supabase]);
+  }, [initialUser, initialProfile]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!user) return;
+    if (!user) {
+      console.error('No user found for profile update');
+      setToast({ show: true, message: 'Authentication error. Please sign in again.', type: 'error' });
+      return;
+    }
     
     setLoading(true);
+    console.log('Starting profile update:', { formData, profile, userId: user.id });
+    
     try {
       if (profile) {
         // Update existing profile
-        const { error } = await supabase
-          .from('profiles')
-          .update(formData)
-          .eq('id', profile.id);
+        console.log('Updating existing profile with ID:', profile.id);
         
-        if (error) throw error;
+        // Filter out role changes for non-admins
+        const updateData = profile.role === 'admin' 
+          ? formData 
+          : (({ role, ...rest }) => {
+              console.log('Non-admin user: role field removed from update');
+              return rest;
+            })(formData);
+        
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(updateData)
+          .eq('id', profile.id)
+          .select()
+          .single();
+        
+        if (error) {
+          console.error('Profile update error:', error);
+          throw error;
+        }
+        
+        console.log('Profile updated successfully:', data);
+        setProfile(data);
         setToast({ show: true, message: 'Profile updated successfully!', type: 'success' });
+        
+        // Dispatch custom event to refresh header
+        window.dispatchEvent(new Event('profileUpdated'));
       } else {
         // Create new profile
-        const { error } = await supabase
+        console.log('Creating new profile for user:', user.id);
+        
+        // Prevent new users from creating admin profiles
+        const createData = { ...formData };
+        if (formData.role === 'admin') {
+          createData.role = 'coach'; // Default new users to coach role
+          console.log('Admin role blocked for new profile creation, defaulting to coach');
+        }
+        
+        const { data, error } = await supabase
           .from('profiles')
           .insert({
             auth_user_id: user.id,
-            ...formData
-          });
+            ...createData
+          })
+          .select()
+          .single();
         
-        if (error) throw error;
+        if (error) {
+          console.error('Profile creation error:', error);
+          throw error;
+        }
+        
+        console.log('Profile created successfully:', data);
+        setProfile(data);
         setToast({ show: true, message: 'Profile created successfully!', type: 'success' });
-        // Reload to get the new profile
-        setTimeout(() => window.location.reload(), 1500);
+        
+        // Dispatch custom event to refresh header
+        window.dispatchEvent(new Event('profileUpdated'));
       }
     } catch (error: any) {
+      console.error('Profile save error:', error);
       setToast({ show: true, message: `Error: ${error.message}`, type: 'error' });
     } finally {
       setLoading(false);
@@ -193,18 +218,18 @@ export default function MyProfileClient() {
     );
   }
 
-  if (!user) {
+  if (!initialUser && !user) {
     return (
       <div className="min-h-screen bg-background-subtle flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-2">Authentication Error</h1>
-          <p className="text-gray-600 mb-4">Unable to load user session. Please try refreshing the page.</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          <p className="text-gray-600 mb-4">Unable to load user session. Please try signing in again.</p>
+          <a 
+            href="/auth/login" 
+            className="bg-ttOrange text-white px-4 py-2 rounded-lg hover:bg-ttOrange/90 inline-block"
           >
-            Refresh Page
-          </button>
+            Sign In
+          </a>
         </div>
       </div>
     );
@@ -259,15 +284,36 @@ export default function MyProfileClient() {
                   <label className="block text-sm font-semibold text-neutral-text mb-2">
                     Role *
                   </label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#123C7A] focus:border-[#123C7A] transition-colors"
-                  >
-                    <option value="coach">Coach</option>
-                    <option value="athlete">Athlete</option>
-                    <option value="admin">Admin</option>
-                  </select>
+                  {profile?.role === 'admin' ? (
+                    // Admins can change roles (including other users' roles if needed)
+                    <select
+                      value={formData.role}
+                      onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#123C7A] focus:border-[#123C7A] transition-colors"
+                    >
+                      <option value="coach">Coach</option>
+                      <option value="athlete">Athlete</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  ) : (
+                    // Non-admins see read-only role badge
+                    <div className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                        formData.role === 'admin' 
+                          ? 'bg-red-100 text-red-800'
+                          : formData.role === 'coach'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {formData.role === 'admin' ? '🛡️ Admin' : 
+                         formData.role === 'coach' ? '👨‍🏫 Coach' : 
+                         '🏃‍♂️ Athlete'}
+                      </span>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Contact an administrator to change your role
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Sport */}
@@ -336,6 +382,13 @@ export default function MyProfileClient() {
             </div>
           </form>
         </div>
+
+        {/* Gallery Section - Only show for coaches */}
+        {profile?.role === 'coach' && (
+          <div className="mt-8">
+            <CoachGallery coachId={profile.id} />
+          </div>
+        )}
       </div>
       
       <Toast 

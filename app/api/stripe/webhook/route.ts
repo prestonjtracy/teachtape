@@ -92,12 +92,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
     session_id: expandedSession.id,
     payment_intent: expandedSession.payment_intent,
     amount_total: expandedSession.amount_total,
-    currency: expandedSession.currency
+    currency: expandedSession.currency,
+    commission_settings_applied: expandedSession.metadata?.commission_settings_applied
   });
 
   // Extract required metadata
   const listingId = expandedSession.metadata?.listing_id;
   const coachId = expandedSession.metadata?.coach_id;
+  const isCommissionSettingsApplied = expandedSession.metadata?.commission_settings_applied === 'true';
+  const platformFeeAmountCents = expandedSession.metadata?.platform_fee_amount_cents;
+  const athleteServiceFee = expandedSession.metadata?.athlete_service_fee;
 
   if (!listingId || !coachId) {
     console.error("⚠️ Missing required metadata:", {
@@ -106,6 +110,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
       metadata: expandedSession.metadata
     });
     throw new Error("Missing required metadata: listing_id or coach_id");
+  }
+
+  // Emit audit log entry for commission settings application
+  if (isCommissionSettingsApplied) {
+    console.log("📊 [AUDIT] commission_settings.applied:", {
+      session_id: expandedSession.id,
+      platform_fee_amount_cents: platformFeeAmountCents,
+      athlete_fee_added_cents: athleteServiceFee,
+      // No PII logged
+    });
   }
 
   // Extract payment intent ID for idempotency
@@ -132,6 +146,33 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
     status: 'paid',
     stripe_session_id: stripeSessionId
   });
+
+  // Verify application fee amount if commission settings were applied
+  if (isCommissionSettingsApplied && platformFeeAmountCents) {
+    try {
+      const paymentIntentObj = typeof expandedSession.payment_intent === 'string' 
+        ? await stripe.paymentIntents.retrieve(expandedSession.payment_intent)
+        : expandedSession.payment_intent;
+      
+      const actualApplicationFee = paymentIntentObj?.application_fee_amount;
+      const expectedApplicationFee = parseInt(platformFeeAmountCents, 10);
+      
+      if (actualApplicationFee !== expectedApplicationFee) {
+        console.warn("⚠️ Application fee mismatch:", {
+          expected: expectedApplicationFee,
+          actual: actualApplicationFee,
+          session_id: expandedSession.id
+        });
+      } else {
+        console.log("✅ Application fee verified:", {
+          amount: actualApplicationFee,
+          session_id: expandedSession.id
+        });
+      }
+    } catch (error) {
+      console.warn("⚠️ Could not verify application fee:", error);
+    }
+  }
 
   // Create server-side Supabase client
   const supabase = createClient();

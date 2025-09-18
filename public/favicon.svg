@@ -1,4 +1,13 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="32" height="32" rx="8" fill="#F45A14"/>
-  <polygon points="12,10 12,22 22,16" fill="white"/>
+  <!-- Main orange rounded rectangle with more rounded corners like image 3 -->
+  <rect x="1" y="6" width="30" height="20" rx="6" fill="#FF5722"/>
+  
+  <!-- Film strip holes on the left (4 squares stacked vertically, positioned like image 3) -->
+  <rect x="3" y="9" width="2" height="2" rx="0.2" fill="white"/>
+  <rect x="3" y="12.5" width="2" height="2" rx="0.2" fill="white"/>
+  <rect x="3" y="16" width="2" height="2" rx="0.2" fill="white"/>
+  <rect x="3" y="19.5" width="2" height="2" rx="0.2" fill="white"/>
+  
+  <!-- Play button triangle (larger and more centered like image 3) -->
+  <polygon points="10,11 10,21 22,16" fill="white"/>
 </svg>

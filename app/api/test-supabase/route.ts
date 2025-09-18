@@ -1,5 +1,6 @@
 import { supabase } from "@/supabase/client";
 
+/**
  * Simple route that returns `id`, `full_name`, and `role` fields
  * from the `profiles` table using the anonymous Supabase client.
  */

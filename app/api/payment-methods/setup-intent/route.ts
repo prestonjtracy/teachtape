@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClientForApiRoute } from "@/lib/supabase/server";
 import Stripe from "stripe";
 
 export async function POST(req: NextRequest) {
@@ -13,11 +13,18 @@ export async function POST(req: NextRequest) {
     }
 
     const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
-    const supabase = createClient();
+    const supabase = createClientForApiRoute(req);
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log('[setup-intent] Auth check:', { 
+      hasUser: !!user, 
+      userId: user?.id, 
+      error: userError?.message 
+    });
+    
     if (userError || !user) {
+      console.error('[setup-intent] Authentication failed:', userError);
       return NextResponse.json(
         { error: "Authentication required" },
         { status: 401 }

@@ -67,15 +67,21 @@ export async function POST(request: NextRequest) {
           .eq('auth_user_id', userId)
 
         if (profileDeleteError) {
+          console.error('Error deleting profile:', profileDeleteError)
           return NextResponse.json({ error: 'Failed to delete user profile' }, { status: 500 })
         }
 
-        // Then delete auth user using admin client
-        const { error: authDeleteError } = await adminSupabase.auth.admin.deleteUser(userId)
+        // Then delete auth user using admin client (if user exists)
+        if (deleteTargetUser?.user) {
+          const { error: authDeleteError } = await adminSupabase.auth.admin.deleteUser(userId)
 
-        if (authDeleteError) {
-          console.error('Error deleting auth user:', authDeleteError)
-          return NextResponse.json({ error: 'Failed to delete user account' }, { status: 500 })
+          if (authDeleteError && authDeleteError.status !== 404) {
+            // Ignore "user not found" errors since the profile was already deleted
+            console.error('Error deleting auth user:', authDeleteError)
+            return NextResponse.json({ error: 'Failed to delete user account' }, { status: 500 })
+          }
+        } else {
+          console.log('Auth user not found, profile-only deletion completed')
         }
 
         // Log the action
@@ -85,7 +91,9 @@ export async function POST(request: NextRequest) {
           targetId: userId,
           targetIdentifier: deleteTargetUser?.user?.email || 'Unknown User',
           details: {
-            deleted_at: new Date().toISOString()
+            deleted_at: new Date().toISOString(),
+            profile_deleted: true,
+            auth_user_existed: !!deleteTargetUser?.user
           }
         })
         break

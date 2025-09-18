@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClientForApiRoute } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (code) {
-    const supabase = createClient()
+    const supabase = createClientForApiRoute(request)
     
     try {
       // Exchange code for session
@@ -72,6 +72,63 @@ export async function GET(request: NextRequest) {
         if (data.session.access_token && data.user?.recovery_sent_at) {
           console.log('🔄 [AUTH CALLBACK] Detected recovery flow via recovery timestamp, redirecting to reset password')
           return NextResponse.redirect(new URL(`/auth/reset-password?session=active`, request.url))
+        }
+        
+        // Handle new user profile creation  
+        if (data.user) {
+          console.log('👤 [AUTH CALLBACK] User authenticated, checking for profile...', {
+            userId: data.user.id,
+            emailConfirmed: !!data.user.email_confirmed_at,
+            hasSession: !!data.session
+          })
+          
+          try {
+            // Check if profile exists
+            const { data: existingProfile, error: profileCheckError } = await supabase
+              .from('profiles')
+              .select('id, role')
+              .eq('auth_user_id', data.user.id)
+              .single()
+            
+            if (profileCheckError && profileCheckError.code === 'PGRST116') {
+              // Profile doesn't exist, create it from user metadata
+              console.log('📝 [AUTH CALLBACK] Creating profile from signup metadata...')
+              
+              const userMetadata = data.user.user_metadata || {}
+              const accountType = userMetadata.account_type || 'athlete'
+              const fullName = userMetadata.full_name || ''
+              
+              const { error: createError } = await supabase
+                .from('profiles')
+                .insert({
+                  auth_user_id: data.user.id,
+                  full_name: fullName,
+                  role: accountType,
+                  email: data.user.email
+                })
+              
+              if (createError) {
+                console.error('❌ [AUTH CALLBACK] Profile creation failed:', createError)
+                // Continue anyway - profile can be created later
+              } else {
+                console.log('✅ [AUTH CALLBACK] Profile created successfully')
+              }
+              
+              // Redirect based on account type
+              const redirectUrl = accountType === 'coach' ? '/dashboard' : '/coaches'
+              console.log('🔄 [AUTH CALLBACK] New user redirect to:', redirectUrl)
+              return NextResponse.redirect(new URL(`${redirectUrl}?signup=success`, request.url))
+            } else if (existingProfile) {
+              console.log('✅ [AUTH CALLBACK] Existing user with profile, role:', existingProfile.role)
+              
+              // Redirect based on existing role
+              const redirectUrl = existingProfile.role === 'coach' ? '/dashboard' : '/coaches'
+              return NextResponse.redirect(new URL(redirectUrl, request.url))
+            }
+          } catch (profileError) {
+            console.error('❌ [AUTH CALLBACK] Profile handling error:', profileError)
+            // Continue with default redirect
+          }
         }
         
         console.log('✅ [AUTH CALLBACK] Normal sign in flow, redirecting to:', next)

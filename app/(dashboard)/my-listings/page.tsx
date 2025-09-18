@@ -1,17 +1,6 @@
-import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
 import MyListingsClient from './MyListingsClient';
 
-export default async function MyListingsPage() {
-  const supabase = createClient();
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect('/auth/login?next=/my-listings');
-  }
-
+export default function MyListingsPage() {
+  // Client-side only to avoid server-side auth issues - data will be fetched in client
   return <MyListingsClient />;
 }

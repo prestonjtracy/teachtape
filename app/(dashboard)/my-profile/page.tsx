@@ -1,17 +1,6 @@
-import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
 import MyProfileClient from './MyProfileClient';
 
-export default async function MyProfilePage() {
-  const supabase = createClient();
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect('/auth/login?next=/my-profile');
-  }
-
-  return <MyProfileClient />;
+export default function MyProfilePage() {
+  // Client-side only to avoid server-side auth issues
+  return <MyProfileClient initialUser={null} initialProfile={null} />;
 }

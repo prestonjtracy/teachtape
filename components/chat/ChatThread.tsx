@@ -121,29 +121,262 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
   };
 
   const isSystemMessage = (message: MessageWithSender) => {
-    return message.kind === 'booking_request' || message.kind === 'system';
+    return message.kind === 'booking_request' || message.kind === 'system' || message.kind === 'booking_accepted';
   };
 
-  const renderZoomLinks = (messageBody: string) => {
-    // Check if message contains Zoom links
-    const zoomJoinPattern = /(https:\/\/[a-zA-Z0-9.-]+\.zoom\.us\/j\/\d+[^\s]*)/g;
-    const parts = messageBody.split(zoomJoinPattern);
+  const formatDateTime = (dateString: string, timezone: string, options?: { timeOnly?: boolean }) => {
+    const date = new Date(dateString);
+    if (options?.timeOnly) {
+      return date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: timezone,
+      });
+    }
+    return date.toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: timezone,
+    });
+  };
+
+  // Function to log zoom button clicks
+  const logZoomClick = async (bookingId: string, actionType: 'start_meeting' | 'join_meeting') => {
+    try {
+      await fetch('/api/zoom-logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          booking_id: bookingId,
+          action_type: actionType,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to log zoom click:', error);
+      // Don't prevent the user from joining - just log the error
+    }
+  };
+
+  // Render booking accepted success card
+  const renderBookingAcceptedCard = (message: MessageWithSender) => {
+    const metadata = message.metadata as any;
+    if (!metadata || metadata.type !== 'booking_accepted') {
+      return null;
+    }
+
+    return (
+      <div className="rounded-xl border bg-green-50 p-5 shadow-sm ring-1 ring-green-100">
+        <div className="flex items-start gap-3">
+          {/* Check Circle Icon */}
+          <svg className="h-6 w-6 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-green-800">
+              Booking accepted! Payment processed successfully.
+            </h3>
+
+            <div className="mt-3 flex items-center gap-2 text-sm text-green-900">
+              {/* Calendar Icon */}
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="font-medium">Zoom Meeting Ready</span>
+            </div>
+
+            <p className="mt-1 text-sm text-green-900">
+              {formatDateTime(metadata.starts_at, metadata.timezone)} – {formatDateTime(metadata.ends_at, metadata.timezone, { timeOnly: true })}
+            </p>
+
+            {metadata.athlete_join_url && metadata.coach_start_url && (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <button
+                  onClick={async () => {
+                    await logZoomClick(metadata.booking_id, 'join_meeting');
+                    window.open(metadata.athlete_join_url, '_blank');
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
+                >
+                  {/* Video Icon */}
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span>Join Zoom Meeting</span>
+                  <span className="sr-only">(Athlete)</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    await logZoomClick(metadata.booking_id, 'start_meeting');
+                    window.open(metadata.coach_start_url, '_blank');
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-4 py-2 text-blue-600 ring-1 ring-blue-600 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
+                >
+                  {/* Video Icon */}
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span>Start Zoom Meeting</span>
+                  <span className="sr-only">(Coach)</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Function to clean old HTML content and detect and render Zoom URLs and markdown links as buttons
+  const renderMessageBody = (body: string, isOwn: boolean, isSystemMessage = false, message?: MessageWithSender) => {
+    // Clean up any old HTML content that might contain buttons
+    let cleanBody = body;
+    
+    // Remove any HTML elements that might contain Join Meeting buttons
+    cleanBody = cleanBody.replace(/<button[^>]*>.*?<\/button>/gi, '');
+    cleanBody = cleanBody.replace(/<a[^>]*>.*?Join Meeting.*?<\/a>/gi, '');
+    cleanBody = cleanBody.replace(/<div[^>]*>.*?Join Meeting.*?<\/div>/gi, '');
+    cleanBody = cleanBody.replace(/Join Meeting(?![a-zA-Z])/g, ''); // Remove standalone "Join Meeting" text
+    
+    // Remove any HTML tags except for specific safe ones we'll add back
+    // Allow <strong> tags for bold formatting, but remove everything else
+    cleanBody = cleanBody.replace(/<(?!\/?(strong|b)\b)[^>]*>/gi, '');
+    
+    // Use the cleaned body for processing
+    body = cleanBody;
+    
+    // Process markdown formatting for bold text
+    body = body.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // First handle markdown-style links [text](url)
+    // Updated regex to handle the format in the message better
+    const markdownLinkRegex = /\[([^\]]*)\]\((https?:\/\/[^\)]+)\)/gi;
+    let processedBody = body;
+    const markdownButtons: JSX.Element[] = [];
+    let match;
+    
+    // Extract markdown links and replace with placeholders
+    while ((match = markdownLinkRegex.exec(body)) !== null) {
+      const [fullMatch, linkText, url] = match;
+      const placeholder = `__MARKDOWN_BUTTON_${markdownButtons.length}__`;
+      processedBody = processedBody.replace(fullMatch, placeholder);
+      
+      // Determine button style based on button type
+      const isStartButton = linkText.toLowerCase().includes('start');
+      const isJoinButton = linkText.toLowerCase().includes('join');
+      
+      let buttonStyle = 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm';
+      
+      if (isSystemMessage) {
+        if (isStartButton) {
+          buttonStyle = 'bg-green-600 text-white hover:bg-green-700 shadow-sm border border-green-500';
+        } else if (isJoinButton) {
+          buttonStyle = 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm border border-blue-500';
+        }
+      } else {
+        buttonStyle = isOwn
+          ? 'bg-white/20 text-white hover:bg-white/30 border border-white/30'
+          : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm';
+      }
+      
+      markdownButtons.push(
+        <div key={markdownButtons.length} className="mt-3">
+          <button
+            onClick={async (e) => {
+              e.preventDefault();
+              
+              // Try to log the click if we have message context
+              if (message && url.includes('zoom')) {
+                const actionType = isStartButton ? 'start_meeting' : 'join_meeting';
+                try {
+                  // For legacy messages, we can't get booking_id easily
+                  // We'll skip logging for now to avoid errors
+                  console.log('Legacy zoom button clicked:', actionType);
+                } catch (error) {
+                  console.error('Failed to log legacy zoom click:', error);
+                }
+              }
+              
+              // Open the zoom URL
+              window.open(url, '_blank');
+            }}
+            className={cn(
+              'inline-flex items-center px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 hover:scale-105 hover:shadow-lg cursor-pointer',
+              buttonStyle
+            )}
+          >
+            {linkText}
+            <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </button>
+        </div>
+      );
+    }
+    
+    // Reset regex for next use
+    markdownLinkRegex.lastIndex = 0;
+    
+    // Only handle raw Zoom URLs if no markdown buttons were created
+    // This prevents duplicate buttons when markdown links contain Zoom URLs
+    const zoomUrlRegex = /(https?:\/\/[^\s]*zoom[^\s]*)/gi;
+    const parts = processedBody.split(zoomUrlRegex);
     
     return parts.map((part, index) => {
-      if (part.match(zoomJoinPattern)) {
+      // Check if this is a markdown button placeholder
+      const markdownButtonMatch = part.match(/__MARKDOWN_BUTTON_(\d+)__/);
+      if (markdownButtonMatch) {
+        const buttonIndex = parseInt(markdownButtonMatch[1]);
+        return markdownButtons[buttonIndex];
+      }
+      
+      if (zoomUrlRegex.test(part) && markdownButtons.length === 0) {
+        // Only create raw Zoom URL buttons if no markdown buttons were created
+        // This prevents duplicate buttons when markdown links contain Zoom URLs
+        const isJoinUrl = part.includes('/j/') || part.toLowerCase().includes('join');
+        const buttonText = isJoinUrl ? '🎥 Join Zoom Meeting' : '🎥 Start Zoom Meeting';
+        
+        const buttonStyle = isSystemMessage 
+          ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+          : isOwn
+            ? 'bg-white/20 text-white hover:bg-white/30 border border-white/30'
+            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm';
+        
         return (
-          <a
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors mt-2 mr-2"
-          >
-            🎥 Join Zoom Meeting
-          </a>
+          <div key={index} className="mt-2">
+            <a
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                'inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                buttonStyle
+              )}
+            >
+              {buttonText}
+              <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
+        );
+      } else {
+        // Regular text - preserve line breaks and render HTML for bold formatting
+        return (
+          <span 
+            key={index} 
+            className="whitespace-pre-wrap"
+            dangerouslySetInnerHTML={{ __html: part }}
+          />
         );
       }
-      return <span key={index}>{part}</span>;
     });
   };
 
@@ -203,12 +436,18 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
             )}
 
             {isSystem ? (
-              <div className="flex justify-center my-3">
-                <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-2 rounded-xl max-w-2xl">
-                  <div className="whitespace-pre-wrap break-words">
-                    {renderZoomLinks(message.body)}
+              <div className="flex justify-center my-4">
+                {message.kind === 'booking_accepted' ? (
+                  <div className="max-w-2xl w-full">
+                    {renderBookingAcceptedCard(message)}
                   </div>
-                </div>
+                ) : (
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 text-blue-900 text-sm px-6 py-4 rounded-xl max-w-2xl shadow-sm">
+                    <div className="whitespace-pre-wrap">
+                      {renderMessageBody(message.body, false, true, message)}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className={cn(
@@ -227,7 +466,7 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
                     </div>
                   )}
                   <div className="text-sm whitespace-pre-wrap break-words">
-                    {message.body}
+                    {renderMessageBody(message.body, isOwn, false, message)}
                   </div>
                   <div className={cn(
                     'text-xs mt-1',

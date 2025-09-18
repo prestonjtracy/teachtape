@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClientForApiRoute } from "@/lib/supabase/server";
 import Stripe from "stripe";
 
 export async function GET(req: NextRequest) {
@@ -13,11 +13,18 @@ export async function GET(req: NextRequest) {
     }
 
     const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
-    const supabase = createClient();
+    const supabase = createClientForApiRoute(req);
 
-    // Get current user
+    // Get current user with better error handling
     const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log('[payment-methods/check] Auth check:', { 
+      hasUser: !!user, 
+      userId: user?.id, 
+      error: userError?.message 
+    });
+    
     if (userError || !user) {
+      console.error('[payment-methods/check] Authentication failed:', userError);
       return NextResponse.json(
         { error: "Authentication required" },
         { status: 401 }
@@ -28,9 +35,10 @@ export async function GET(req: NextRequest) {
     // In a full implementation, you'd check the user's saved payment methods in Stripe
     // This would require storing customer IDs in your database
     
-    return NextResponse.json({
-      hasPaymentMethods: false // Always require payment method setup for MVP
-    });
+    return NextResponse.json(
+      { hasPaymentMethods: false },
+      { status: 200 }
+    );
 
   } catch (error) {
     console.error('Error checking payment methods:', error);

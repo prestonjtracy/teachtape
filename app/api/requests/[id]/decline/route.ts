@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClientForApiRoute } from "@/lib/supabase/server";
 import { z } from "zod";
 import { sendBookingRequestEmailsAsync } from "@/lib/email";
 
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const validatedData = DeclineRequestSchema.parse(params);
     const requestId = validatedData.id;
 
-    const supabase = createClient();
+    const supabase = createClientForApiRoute(req);
 
     // Get current user (coach)
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // Send system message to conversation
-    const systemMessage = "❌ Declined.";
+    const systemMessage = "❌ **Booking Request Declined**\n\nThe coach has declined your booking request. You can submit a new request with different times if needed.";
     const { error: messageError } = await supabase
       .from('messages')
       .insert({

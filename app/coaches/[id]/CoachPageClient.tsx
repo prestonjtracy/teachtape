@@ -4,6 +4,7 @@ import { useState } from 'react';
 import ProfileHeader from '@/components/ProfileHeader';
 import ListingCard from '@/components/ListingCard';
 import RequestTimeModal from '@/components/RequestTimeModal';
+import CoachGalleryDisplay from '@/components/CoachGalleryDisplay';
 
 interface Coach {
   id: string;
@@ -111,6 +112,12 @@ export default function CoachPageClient({ coach }: CoachPageClientProps) {
           sport={coach.sport}
         />
       </div>
+
+      {/* Gallery Section */}
+      <CoachGalleryDisplay 
+        coachId={coach.id} 
+        coachName={coach.full_name || undefined} 
+      />
 
       {/* Listings Section */}
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">

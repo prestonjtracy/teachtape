@@ -58,7 +58,8 @@ export default function UsersTable({ initialUsers }: UsersTableProps) {
         // Refresh the page data
         router.refresh()
       } else {
-        alert('Error performing action')
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        alert(`Error: ${errorData.error || 'Unknown error occurred'}`)
       }
     } catch (error) {
       alert('Error performing action')

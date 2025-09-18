@@ -24,6 +24,24 @@ export interface FeePolicy {
   minimumFeeCents: number;
 }
 
+export interface CommissionSettings {
+  /** Platform commission percentage taken from coach earnings (0-30%) - uses existing platform_fee_percentage */
+  platformCommissionPercentage: number;
+  /** Type of athlete service fee: 'none', 'percentage', or 'flat' */
+  athleteServiceFeeType: 'none' | 'percentage' | 'flat';
+  /** Athlete service fee percentage (0-30%) */
+  athleteServiceFeePercentage: number;
+  /** Athlete service fee flat amount in cents (0-2000) */
+  athleteServiceFeeFlatCents: number;
+}
+
+export interface ExtendedFeeBreakdown extends FeeBreakdown {
+  /** Amount added to total for athlete service fee */
+  athleteServiceFee: number;
+  /** Total amount charged to athlete (original + service fee) */
+  totalChargedToAthlete: number;
+}
+
 /**
  * Default fee policy for TeachTape
  * - 10% platform fee
@@ -130,6 +148,16 @@ export function validateFeeAmount(amountCents: number, feeCents: number): boolea
 }
 
 /**
+ * Default commission settings for TeachTape
+ */
+export const DEFAULT_COMMISSION_SETTINGS: CommissionSettings = {
+  platformCommissionPercentage: 10.0, // 10%
+  athleteServiceFeeType: 'none',
+  athleteServiceFeePercentage: 0.0,
+  athleteServiceFeeFlatCents: 0,
+};
+
+/**
  * Get fee policy from environment variables or use defaults
  * This allows for easy configuration in different environments
  */
@@ -143,6 +171,224 @@ export function getFeePolicy(): FeePolicy {
     fixedFeeCents: envFixedFee ? parseInt(envFixedFee, 10) : DEFAULT_FEE_POLICY.fixedFeeCents,
     minimumFeeCents: envMinFee ? parseInt(envMinFee, 10) : DEFAULT_FEE_POLICY.minimumFeeCents,
   };
+}
+
+// Cache for commission settings to avoid DB spam
+let settingsCache: { settings: CommissionSettings; timestamp: number } | null = null;
+const CACHE_DURATION_MS = 60 * 1000; // 60 seconds
+
+/**
+ * Get active commission settings with in-memory caching
+ * Cached for 60 seconds to avoid database spam
+ */
+export async function getActiveCommissionSettings(): Promise<CommissionSettings> {
+  if (typeof window !== 'undefined') {
+    throw new Error('getActiveCommissionSettings() can only be called server-side');
+  }
+
+  const now = Date.now();
+  
+  // Return cached settings if still valid
+  if (settingsCache && (now - settingsCache.timestamp) < CACHE_DURATION_MS) {
+    return settingsCache.settings;
+  }
+
+  try {
+    // Import settings service to reuse the new centralized service
+    const { getCommissionSettings: getSettings } = await import('@/lib/settingsService');
+    const settings = await getSettings();
+    
+    const commissionSettings: CommissionSettings = {
+      platformCommissionPercentage: settings.platform_fee_percentage,
+      athleteServiceFeeType: determineAthleteServiceFeeType(
+        settings.athlete_service_fee_percent,
+        settings.athlete_service_fee_flat_cents
+      ),
+      athleteServiceFeePercentage: settings.athlete_service_fee_percent,
+      athleteServiceFeeFlatCents: settings.athlete_service_fee_flat_cents,
+    };
+
+    // Cache the settings
+    settingsCache = {
+      settings: commissionSettings,
+      timestamp: now
+    };
+
+    return commissionSettings;
+  } catch (error) {
+    console.warn('Error fetching commission settings, using defaults:', error);
+    return DEFAULT_COMMISSION_SETTINGS;
+  }
+}
+
+/**
+ * Get commission settings from database or fallback to defaults
+ * This function should be called from server-side code only
+ * @deprecated Use getActiveCommissionSettings() instead for caching
+ */
+export async function getCommissionSettings(): Promise<CommissionSettings> {
+  return getActiveCommissionSettings();
+}
+
+/**
+ * Determine athlete service fee type based on settings
+ */
+function determineAthleteServiceFeeType(
+  percentFee: number,
+  flatCents: number
+): 'none' | 'percentage' | 'flat' {
+  if (percentFee > 0 && flatCents > 0) {
+    // If both are set, percentage takes precedence
+    return 'percentage';
+  } else if (percentFee > 0) {
+    return 'percentage';
+  } else if (flatCents > 0) {
+    return 'flat';
+  }
+  return 'none';
+}
+
+/**
+ * Calculate platform cut in cents using integer math
+ * @param subtotalCents - Subtotal amount in cents
+ * @param platformPct - Platform percentage (0-30)
+ * @returns Platform cut amount in cents
+ */
+export function calcPlatformCutCents(subtotalCents: number, platformPct: number): number {
+  if (subtotalCents <= 0) {
+    throw new Error('Subtotal must be greater than 0');
+  }
+  
+  // Clamp platform percentage between 0 and 30
+  const clampedPct = Math.max(0, Math.min(30, platformPct));
+  
+  // Calculate using integer math and round to nearest cent
+  return Math.round(subtotalCents * (clampedPct / 100));
+}
+
+/**
+ * Calculate athlete fee line items
+ * @param feeConfig - Fee configuration with percent and/or flat amounts
+ * @param subtotalCents - Subtotal amount in cents
+ * @returns Object with potential percent and flat fee line items
+ */
+export function calcAthleteFeeLineItems(
+  feeConfig: { percent: number; flatCents: number },
+  subtotalCents: number
+): {
+  percentItem?: { name: string; amount_cents: number };
+  flatItem?: { name: string; amount_cents: number };
+} {
+  const result: {
+    percentItem?: { name: string; amount_cents: number };
+    flatItem?: { name: string; amount_cents: number };
+  } = {};
+
+  // Clamp percentage between 0 and 30
+  const clampedPercent = Math.max(0, Math.min(30, feeConfig.percent));
+  
+  // Clamp flat fee between 0 and 2000 cents ($20.00)
+  const clampedFlatCents = Math.max(0, Math.min(2000, feeConfig.flatCents));
+
+  // Add percentage-based fee if applicable
+  if (clampedPercent > 0) {
+    const percentAmount = Math.round(subtotalCents * (clampedPercent / 100));
+    if (percentAmount > 0) {
+      result.percentItem = {
+        name: `Service fee (${clampedPercent}%)`,
+        amount_cents: percentAmount
+      };
+    }
+  }
+
+  // Add flat fee if applicable
+  if (clampedFlatCents > 0) {
+    result.flatItem = {
+      name: 'Service fee',
+      amount_cents: clampedFlatCents
+    };
+  }
+
+  return result;
+}
+
+/**
+ * Calculate athlete service fee based on commission settings
+ * @deprecated Use calcAthleteFeeLineItems for more detailed breakdown
+ */
+export function calculateAthleteServiceFee(
+  basePriceCents: number,
+  commissionSettings: CommissionSettings
+): number {
+  if (commissionSettings.athleteServiceFeeType === 'none') {
+    return 0;
+  }
+  
+  if (commissionSettings.athleteServiceFeeType === 'flat') {
+    // Apply clamping for safety
+    return Math.max(0, Math.min(2000, commissionSettings.athleteServiceFeeFlatCents));
+  }
+  
+  if (commissionSettings.athleteServiceFeeType === 'percentage') {
+    // Apply clamping for safety
+    const clampedPercent = Math.max(0, Math.min(30, commissionSettings.athleteServiceFeePercentage));
+    return Math.round(basePriceCents * (clampedPercent / 100));
+  }
+  
+  return 0;
+}
+
+/**
+ * Get detailed fee breakdown including athlete service fees
+ */
+export function getExtendedFeeBreakdown(
+  basePriceCents: number,
+  commissionSettings: CommissionSettings
+): ExtendedFeeBreakdown {
+  // Calculate athlete service fee
+  const athleteServiceFee = calculateAthleteServiceFee(basePriceCents, commissionSettings);
+  const totalChargedToAthlete = basePriceCents + athleteServiceFee;
+  
+  // Calculate platform commission from base price (not including service fee)
+  const platformCommissionAmount = calcPlatformCutCents(basePriceCents, commissionSettings.platformCommissionPercentage);
+  const coachAmount = basePriceCents - platformCommissionAmount;
+  
+  return {
+    originalAmount: basePriceCents,
+    platformFee: platformCommissionAmount,
+    coachAmount,
+    feePercentage: commissionSettings.platformCommissionPercentage / 100,
+    fixedFeeCents: 0, // Commission is percentage-based, not fixed
+    athleteServiceFee,
+    totalChargedToAthlete,
+  };
+}
+
+/**
+ * Validate commission settings
+ */
+export function validateCommissionSettings(settings: Partial<CommissionSettings>): string[] {
+  const errors: string[] = [];
+  
+  if (settings.platformCommissionPercentage !== undefined) {
+    if (settings.platformCommissionPercentage < 0 || settings.platformCommissionPercentage > 30) {
+      errors.push('Platform commission must be between 0% and 30%');
+    }
+  }
+  
+  if (settings.athleteServiceFeePercentage !== undefined) {
+    if (settings.athleteServiceFeePercentage < 0 || settings.athleteServiceFeePercentage > 30) {
+      errors.push('Athlete service fee percentage must be between 0% and 30%');
+    }
+  }
+  
+  if (settings.athleteServiceFeeFlatCents !== undefined) {
+    if (settings.athleteServiceFeeFlatCents < 0 || settings.athleteServiceFeeFlatCents > 2000) {
+      errors.push('Athlete service fee must be between $0.00 and $20.00');
+    }
+  }
+  
+  return errors;
 }
 
 // Export commonly used fee calculation for convenience

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import CommissionSettings from './CommissionSettings'
 
 interface Setting {
   id: string
@@ -36,6 +37,7 @@ export default function AdminSettings({ groupedSettings, recentLogs }: AdminSett
   const categoryDisplayNames: Record<string, string> = {
     system: 'System & Maintenance',
     features: 'Platform Features',
+    commission: 'Commission Settings',
     payments: 'Payment Settings',
     general: 'General Settings',
     contact: 'Contact Information'
@@ -44,6 +46,7 @@ export default function AdminSettings({ groupedSettings, recentLogs }: AdminSett
   const categoryIcons: Record<string, string> = {
     system: '🔧',
     features: '⚡',
+    commission: '💰',
     payments: '💳',
     general: '⚙️',
     contact: '📧'
@@ -96,13 +99,55 @@ export default function AdminSettings({ groupedSettings, recentLogs }: AdminSett
     }))
   }
 
+  const validateCommissionSetting = (setting: Setting, value: any): string | null => {
+    const numValue = parseFloat(value)
+    
+    // Platform commission percentage validation (using existing platform_fee_percentage)
+    if (setting.setting_key === 'platform_fee_percentage') {
+      if (isNaN(numValue) || numValue < 0 || numValue > 30) {
+        return 'Platform commission must be between 0% and 30%'
+      }
+    }
+    
+    // Athlete service fee percentage validation
+    if (setting.setting_key === 'athlete_service_fee_percentage') {
+      if (isNaN(numValue) || numValue < 0 || numValue > 30) {
+        return 'Athlete service fee percentage must be between 0% and 30%'
+      }
+    }
+    
+    // Athlete service fee flat cents validation
+    if (setting.setting_key === 'athlete_service_fee_flat_cents') {
+      if (isNaN(numValue) || numValue < 0 || numValue > 2000) {
+        return 'Athlete service fee must be between $0.00 and $20.00 (0-2000 cents)'
+      }
+    }
+    
+    return null
+  }
+
   const handleInputSubmit = (setting: Setting) => {
     const pendingValue = pendingChanges[setting.id]
     if (pendingValue !== undefined) {
       let processedValue = pendingValue
       
       if (setting.setting_type === 'number') {
-        processedValue = parseInt(pendingValue) || 0
+        const numValue = parseFloat(pendingValue)
+        if (isNaN(numValue)) {
+          alert('Please enter a valid number')
+          return
+        }
+        
+        // Validate commission settings
+        if (setting.category === 'commission') {
+          const validationError = validateCommissionSetting(setting, numValue)
+          if (validationError) {
+            alert(validationError)
+            return
+          }
+        }
+        
+        processedValue = numValue
       }
       
       updateSetting(setting, processedValue)
@@ -140,6 +185,22 @@ export default function AdminSettings({ groupedSettings, recentLogs }: AdminSett
         )
 
       case 'string':
+        // Special handling for athlete service fee type
+        if (setting.setting_key === 'athlete_service_fee_type') {
+          return (
+            <select
+              value={currentValue}
+              onChange={(e) => updateSetting(setting, e.target.value)}
+              disabled={isLoading}
+              className="px-3 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-[#F25C1F] focus:border-[#F25C1F] outline-none"
+            >
+              <option value="none">No service fee</option>
+              <option value="percentage">Percentage fee</option>
+              <option value="flat">Flat fee</option>
+            </select>
+          )
+        }
+
         return (
           <div className="flex space-x-2">
             <input
@@ -164,16 +225,24 @@ export default function AdminSettings({ groupedSettings, recentLogs }: AdminSett
         )
 
       case 'number':
+        const isPercentage = setting.setting_key.includes('percentage')
+        const isCents = setting.setting_key.includes('cents')
+        
         return (
-          <div className="flex space-x-2">
+          <div className="flex space-x-2 items-center">
             <input
               type="number"
               value={currentValue}
               onChange={(e) => handleInputChange(setting, e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleInputSubmit(setting)}
               disabled={isLoading}
+              step={isPercentage ? "0.1" : isCents ? "1" : "any"}
+              min={0}
+              max={isPercentage ? 30 : isCents ? 2000 : undefined}
               className="w-24 px-3 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-[#F25C1F] focus:border-[#F25C1F] outline-none"
             />
+            {isPercentage && <span className="text-sm text-gray-600">%</span>}
+            {isCents && <span className="text-sm text-gray-600">¢</span>}
             {pendingValue !== undefined && (
               <button
                 onClick={() => handleInputSubmit(setting)}
@@ -200,6 +269,12 @@ export default function AdminSettings({ groupedSettings, recentLogs }: AdminSett
 
   return (
     <div className="p-6">
+      {/* Commission Settings Section (Client-side) */}
+      <div className="mb-8 border-b border-gray-200 pb-8">
+        <CommissionSettings onUpdate={() => router.refresh()} />
+      </div>
+
+      {/* Regular Settings Sections (Server-side) */}
       {Object.entries(groupedSettings).map(([category, settings]) => (
         <div key={category} className="mb-8 last:mb-0">
           <div className="flex items-center space-x-2 mb-4">

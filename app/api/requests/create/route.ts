@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClientForApiRoute } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import { z } from "zod";
 import { sendBookingRequestEmailsAsync } from "@/lib/email";
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       timezone: validatedData.timezone
     });
 
-    const supabase = createClient();
+    const supabase = createClientForApiRoute(req);
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -333,6 +333,8 @@ export async function POST(req: NextRequest) {
       client_secret: setupIntentClientSecret, // Will be null if payment method already exists
       needs_payment_method: setupIntentClientSecret !== null,
       message: 'Booking request created successfully'
+    }, { 
+      status: 200
     });
 
   } catch (error) {

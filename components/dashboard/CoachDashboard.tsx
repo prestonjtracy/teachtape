@@ -224,60 +224,60 @@ export default function CoachDashboard({
         <div>
           <h2 className="text-2xl font-semibold text-neutral-text mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="hover:shadow-brand-md transition-shadow group">
-              <CardBody className="p-6 text-center">
+            <Card className="hover:shadow-brand-md transition-shadow group h-full">
+              <CardBody className="p-6 text-center flex flex-col h-full">
                 <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-green-200 transition-colors">
                   <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.959 8.959 0 01-4.906-1.476L3 21l1.476-5.094A8.959 8.959 0 013 12c0-4.418 3.582-8 8-8s8 3.582 8 8z" />
                   </svg>
                 </div>
                 <h3 className="font-semibold text-neutral-text mb-2">Messages</h3>
-                <p className="text-sm text-neutral-text-muted mb-4">View conversations with athletes</p>
+                <p className="text-sm text-neutral-text-muted mb-4 flex-grow">View conversations with athletes</p>
                 <Button asChild variant="outline" className="w-full">
                   <Link href="/messages">View</Link>
                 </Button>
               </CardBody>
             </Card>
 
-            <Card className="hover:shadow-brand-md transition-shadow group">
-              <CardBody className="p-6 text-center">
+            <Card className="hover:shadow-brand-md transition-shadow group h-full">
+              <CardBody className="p-6 text-center flex flex-col h-full">
                 <div className="w-12 h-12 bg-brand-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-brand-primary/20 transition-colors">
                   <svg className="w-6 h-6 text-brand-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
                 <h3 className="font-semibold text-neutral-text mb-2">Profile & Payments</h3>
-                <p className="text-sm text-neutral-text-muted mb-4">Manage your profile and Stripe account</p>
+                <p className="text-sm text-neutral-text-muted mb-4 flex-grow">Manage your profile and Stripe account</p>
                 <Button asChild variant="outline" className="w-full">
                   <Link href="/dashboard/profile">Manage</Link>
                 </Button>
               </CardBody>
             </Card>
 
-            <Card className="hover:shadow-brand-md transition-shadow group">
-              <CardBody className="p-6 text-center">
+            <Card className="hover:shadow-brand-md transition-shadow group h-full">
+              <CardBody className="p-6 text-center flex flex-col h-full">
                 <div className="w-12 h-12 bg-brand-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-brand-primary/20 transition-colors">
                   <svg className="w-6 h-6 text-brand-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
                 </div>
                 <h3 className="font-semibold text-neutral-text mb-2">Manage Listings</h3>
-                <p className="text-sm text-neutral-text-muted mb-4">Add, edit, or remove your coaching sessions</p>
+                <p className="text-sm text-neutral-text-muted mb-4 flex-grow">Add, edit, or remove your coaching sessions</p>
                 <Button asChild className="w-full">
                   <Link href="/my-listings">Manage</Link>
                 </Button>
               </CardBody>
             </Card>
 
-            <Card className="hover:shadow-brand-md transition-shadow group">
-              <CardBody className="p-6 text-center">
+            <Card className="hover:shadow-brand-md transition-shadow group h-full">
+              <CardBody className="p-6 text-center flex flex-col h-full">
                 <div className="w-12 h-12 bg-brand-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-brand-primary/20 transition-colors">
                   <svg className="w-6 h-6 text-brand-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                 </div>
                 <h3 className="font-semibold text-neutral-text mb-2">Edit Profile</h3>
-                <p className="text-sm text-neutral-text-muted mb-4">Update your bio, sport, and contact info</p>
+                <p className="text-sm text-neutral-text-muted mb-4 flex-grow">Update your bio, sport, and contact info</p>
                 <Button asChild variant="secondary" className="w-full">
                   <Link href="/my-profile">Edit</Link>
                 </Button>

@@ -32,7 +32,7 @@ export default async function SettingsPage() {
     return acc
   }, {}) || {}
 
-  // Get recent audit logs for settings changes
+  // Get recent audit logs for settings changes (including commission settings)
   const { data: recentLogs, error: logsError } = await supabase
     .from('audit_logs')
     .select(`
@@ -43,7 +43,7 @@ export default async function SettingsPage() {
       details,
       created_at
     `)
-    .eq('target_type', 'setting')
+    .in('target_type', ['setting', 'commission_settings'])
     .order('created_at', { ascending: false })
     .limit(10)
 

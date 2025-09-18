@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import { z } from "zod";
-import { calculateApplicationFee, getFeeBreakdown, validateFeeAmount } from "@/lib/stripeFees";
+import { calculateApplicationFee, getFeeBreakdown, validateFeeAmount, getActiveCommissionSettings, getExtendedFeeBreakdown, calcPlatformCutCents, calcAthleteFeeLineItems } from "@/lib/stripeFees";
 
 const CheckoutSchema = z.object({
   listing_id: z.string().uuid("Invalid listing ID"),
@@ -201,37 +201,24 @@ export async function POST(req: NextRequest) {
     }
 
     // Production mode with full Stripe setup
-    // Calculate platform fee using fee policy
-    const platformFeeAmount = calculateApplicationFee(rateCents);
-    const feeBreakdown = getFeeBreakdown(rateCents);
+    // Check feature flag
+    const useCommissionSettings = process.env.ENABLE_COMMISSION_SETTINGS !== 'false';
     
-    // Validate fee amount for safety
-    if (!validateFeeAmount(rateCents, platformFeeAmount)) {
-      console.error(`❌ [POST /api/checkout] Invalid fee calculation:`, {
-        rateCents,
-        platformFeeAmount,
-        coachReceives: rateCents - platformFeeAmount
-      });
-      return new Response(
-        JSON.stringify({ error: "Invalid fee calculation" }), 
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-    
-    console.log(`💰 [POST /api/checkout] Payment breakdown:`, {
-      rateCents,
-      platformFeeAmount,
-      coachReceives: feeBreakdown.coachAmount,
-      feePercentage: `${(feeBreakdown.feePercentage * 100).toFixed(1)}%`,
-      fixedFee: `$${(feeBreakdown.fixedFeeCents / 100).toFixed(2)}`,
-      stripeAccountId: coachData.stripe_account_id
-    });
+    if (!useCommissionSettings) {
+      console.log('🚧 [POST /api/checkout] Commission settings disabled, using legacy behavior');
+      // Fall back to legacy fixed behavior
+      const platformFeeAmount = calculateApplicationFee(rateCents);
+      
+      if (!validateFeeAmount(rateCents, platformFeeAmount)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid fee calculation" }), 
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
 
-    // Create Stripe Checkout Session with platform fee
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      line_items: [
-        {
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        line_items: [{
           price_data: {
             currency: 'usd',
             product_data: {
@@ -241,10 +228,128 @@ export async function POST(req: NextRequest) {
             unit_amount: rateCents
           },
           quantity: 1
+        }],
+        payment_intent_data: {
+          application_fee_amount: platformFeeAmount,
+          transfer_data: {
+            destination: coachData.stripe_account_id
+          }
+        },
+        success_url: `${appUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appUrl}/cancel?coach_id=${validatedData.coach_id}`,
+        metadata: {
+          listing_id: validatedData.listing_id,
+          coach_id: validatedData.coach_id,
+          legacy_mode: 'true'
         }
-      ],
+      });
+
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          url: session.url,
+          sessionId: session.id
+        }), 
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Get commission settings from database once
+    const commissionSettings = await getActiveCommissionSettings();
+    
+    // Calculate platform cut using new function with clamping
+    const actualPlatformFee = calcPlatformCutCents(rateCents, commissionSettings.platformCommissionPercentage);
+    
+    // Calculate athlete fee line items
+    const athleteFeeLineItems = calcAthleteFeeLineItems(
+      {
+        percent: commissionSettings.athleteServiceFeePercentage,
+        flatCents: commissionSettings.athleteServiceFeeFlatCents
+      },
+      rateCents
+    );
+    
+    // Calculate total athlete fee
+    let totalAthleteFee = 0;
+    if (athleteFeeLineItems.percentItem) totalAthleteFee += athleteFeeLineItems.percentItem.amount_cents;
+    if (athleteFeeLineItems.flatItem) totalAthleteFee += athleteFeeLineItems.flatItem.amount_cents;
+    
+    const totalChargeAmount = rateCents + totalAthleteFee;
+    const coachReceives = rateCents - actualPlatformFee;
+    
+    // Validate fee amount for safety
+    if (!validateFeeAmount(rateCents, actualPlatformFee)) {
+      console.error(`❌ [POST /api/checkout] Invalid fee calculation:`, {
+        rateCents,
+        actualPlatformFee,
+        coachReceives
+      });
+      return new Response(
+        JSON.stringify({ error: "Invalid fee calculation" }), 
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    
+    console.log(`💰 [POST /api/checkout] Payment breakdown:`, {
+      listingPrice: rateCents,
+      athleteServiceFee: totalAthleteFee,
+      totalChargedToAthlete: totalChargeAmount,
+      platformCommission: actualPlatformFee,
+      coachReceives,
+      commissionPercentage: `${commissionSettings.platformCommissionPercentage.toFixed(1)}%`,
+      stripeAccountId: coachData.stripe_account_id
+    });
+
+    // Build line items for checkout - start with main listing
+    const lineItems = [
+      {
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `${listing.title} with ${coachName}`,
+            description: listing.description || `${listing.duration_minutes}-minute coaching session`
+          },
+          unit_amount: rateCents
+        },
+        quantity: 1
+      }
+    ];
+
+    // Add athlete service fee line items if applicable (not included in coach subtotal)
+    if (athleteFeeLineItems.percentItem) {
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: athleteFeeLineItems.percentItem.name,
+            description: 'Platform service fee'
+          },
+          unit_amount: athleteFeeLineItems.percentItem.amount_cents
+        },
+        quantity: 1
+      });
+    }
+    
+    if (athleteFeeLineItems.flatItem) {
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: athleteFeeLineItems.flatItem.name,
+            description: 'Platform service fee'
+          },
+          unit_amount: athleteFeeLineItems.flatItem.amount_cents
+        },
+        quantity: 1
+      });
+    }
+
+    // Create Stripe Checkout Session with platform commission
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: lineItems,
       payment_intent_data: {
-        application_fee_amount: platformFeeAmount,
+        application_fee_amount: actualPlatformFee,
         transfer_data: {
           destination: coachData.stripe_account_id
         }
@@ -253,7 +358,11 @@ export async function POST(req: NextRequest) {
       cancel_url: `${appUrl}/cancel?coach_id=${validatedData.coach_id}`,
       metadata: {
         listing_id: validatedData.listing_id,
-        coach_id: validatedData.coach_id
+        coach_id: validatedData.coach_id,
+        commission_percentage: commissionSettings.platformCommissionPercentage.toString(),
+        athlete_service_fee: totalAthleteFee.toString(),
+        platform_fee_amount_cents: actualPlatformFee.toString(),
+        commission_settings_applied: 'true'
       }
     });
 

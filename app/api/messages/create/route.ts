@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClientForApiRoute } from "@/lib/supabase/server";
 import { z } from "zod";
 
 const CreateMessageSchema = z.object({
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       kind: validatedData.kind
     });
 
-    const supabase = createClient();
+    const supabase = createClientForApiRoute(req);
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();

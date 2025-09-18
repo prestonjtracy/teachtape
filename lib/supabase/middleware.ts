@@ -28,18 +28,41 @@ export async function updateSession(request: NextRequest) {
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let user = null;
+  try {
+    const {
+      data: { user: userData },
+      error
+    } = await supabase.auth.getUser()
+    
+    if (error) {
+      console.error('❌ [Middleware] Auth error:', error);
+      // Be more forgiving with auth errors - don't immediately fail
+      if (error.message && error.message.includes('session_missing')) {
+        // Allow request to continue, let client-side handle auth
+        return supabaseResponse;
+      }
+    } else {
+      user = userData;
+    }
+  } catch (error) {
+    console.error('❌ [Middleware] Network error getting user:', error);
+    // On network error, don't redirect - allow the request to continue
+    // This prevents users from being logged out due to temporary network issues
+    return supabaseResponse;
+  }
 
+  // Only redirect to login for very specific protected routes and only if we're confident there's no user
   if (
     !user &&
     !request.nextUrl.pathname.startsWith('/auth') &&
-    (request.nextUrl.pathname.startsWith('/dashboard') ||
-     request.nextUrl.pathname.startsWith('/my-profile') ||
-     request.nextUrl.pathname.startsWith('/my-listings'))
+    !request.nextUrl.pathname.startsWith('/') && // Allow home page
+    !request.nextUrl.pathname.startsWith('/coaches') && // Allow coaches page
+    !request.nextUrl.pathname.startsWith('/api') && // Allow API routes
+    (request.nextUrl.pathname.startsWith('/admin/users') || // Only protect very sensitive admin pages
+     request.nextUrl.pathname.startsWith('/admin/settings'))
   ) {
-    // no user, potentially respond by redirecting the user to the login page
+    // Only redirect for highly sensitive pages
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     url.searchParams.set('next', request.nextUrl.pathname)

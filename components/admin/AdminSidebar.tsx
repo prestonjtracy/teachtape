@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 // Simple SVG icons
 const Icons = {
@@ -51,6 +53,11 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
     </svg>
   ),
+  ZoomLogs: (props: any) => (
+    <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </svg>
+  ),
 }
 
 const navigation = [
@@ -61,12 +68,83 @@ const navigation = [
   { name: 'Bookings', href: '/admin/bookings', icon: Icons.Bookings },
   { name: 'Payments', href: '/admin/payments', icon: Icons.Payments },
   { name: 'Conversations', href: '/admin/conversations', icon: Icons.Conversations },
+  { name: 'Zoom Logs', href: '/admin/zoom-logs', icon: Icons.ZoomLogs },
   { name: 'Settings', href: '/admin/settings', icon: Icons.Settings },
   { name: 'Audit Logs', href: '/admin/audit-logs', icon: Icons.AuditLogs },
 ]
 
 export default function AdminSidebar() {
   const pathname = usePathname()
+  const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const supabase = createClient()
+
+  useEffect(() => {
+    async function getUser() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        setUser(user)
+        
+        if (user) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, role')
+            .eq('auth_user_id', user.id)
+            .single()
+          
+          setProfile(profileData)
+          
+          // If user is not admin, redirect them
+          if (profileData?.role !== 'admin') {
+            window.location.href = '/dashboard'
+            return
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    getUser()
+  }, [supabase])
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex flex-col w-64 bg-white border-r border-gray-200">
+        <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200">
+          <div className="animate-pulse h-6 w-32 bg-gray-200 rounded"></div>
+        </div>
+        <div className="flex-1 px-4 py-6 space-y-2">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="animate-pulse h-10 bg-gray-200 rounded"></div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Show access denied if not admin
+  if (!user || !profile || profile.role !== 'admin') {
+    return (
+      <div className="flex flex-col w-64 bg-white border-r border-gray-200">
+        <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200">
+          <h1 className="text-xl font-bold text-red-600">Access Denied</h1>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="text-center">
+            <p className="text-red-600 text-sm">Admin access required</p>
+            <Link href="/dashboard" className="text-blue-600 text-sm hover:underline mt-2 block">
+              Return to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col w-64 bg-white border-r border-gray-200">
@@ -108,24 +186,36 @@ export default function AdminSidebar() {
       <div className="flex items-center justify-between p-4 border-t border-gray-200">
         <div className="flex items-center space-x-3">
           <div className="flex-shrink-0">
-            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-medium">A</span>
-            </div>
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt="Admin avatar"
+                className="w-8 h-8 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                <span className="text-white text-sm font-medium">
+                  {(profile?.full_name || 'A')[0]?.toUpperCase()}
+                </span>
+              </div>
+            )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-900 truncate">Admin</p>
+            <p className="text-sm font-medium text-gray-900 truncate">
+              {profile?.full_name || 'Admin'}
+            </p>
             <p className="text-xs text-gray-500 truncate">Administrator</p>
           </div>
         </div>
-        <Link
-          href="/auth/logout"
+        <button
+          onClick={() => supabase.auth.signOut()}
           className="text-gray-400 hover:text-gray-600 transition-colors"
           title="Sign out"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
-        </Link>
+        </button>
       </div>
     </div>
   )
