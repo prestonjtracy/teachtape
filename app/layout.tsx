@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import Header from "./_components/Header";
 import TestModeBanner from "@/components/TestModeBanner";
+import { AuthProvider } from "@/lib/auth/AuthContext";
 
 export const metadata: Metadata = {
   title: "TeachTape",
@@ -24,13 +25,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <TestModeBanner isTestMode={isTestMode} />
-        <div className="min-h-screen" style={{
-          paddingTop: isTestMode ? '44px' : '0'
-        }}>
-          <Header />
-          {children}
-        </div>
+        <AuthProvider>
+          <TestModeBanner isTestMode={isTestMode} />
+          <div className="min-h-screen" style={{
+            paddingTop: isTestMode ? '44px' : '0'
+          }}>
+            <Header />
+            {children}
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );

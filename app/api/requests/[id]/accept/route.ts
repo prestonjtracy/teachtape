@@ -417,14 +417,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate}\n\n**For Athlete:** [🎥 Join Meeting](${zoomJoinUrl})\n\n**For Coach:** [🎥 Start Meeting](${zoomStartUrl})`;
     }
 
+    console.log('📝 [POST /api/requests/accept] System message content:', systemMessage);
+
     const { error: messageError } = await adminClient
       .from('messages')
       .insert({
         conversation_id: bookingRequest.conversation_id,
         sender_id: null, // System message
         body: systemMessage,
-        kind: 'booking_accepted',
-        metadata: messageData
+        kind: 'booking_accepted'
       });
 
     if (messageError) {

@@ -9,8 +9,7 @@ export function createClient() {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
-        // Removed custom storageKey to use default Supabase cookie names
-        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        flowType: 'pkce',
       },
       global: {
         headers: {

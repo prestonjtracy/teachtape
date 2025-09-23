@@ -1,130 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from "next/link";
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/lib/auth/AuthContext";
 
 export default function Header() {
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, profile, loading, signOut } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const supabase = createClient();
 
-  // Hard timeout to prevent infinite loading
-  useEffect(() => {
-    const hardTimeout = setTimeout(() => {
-      console.log('🚨 [Header] Hard timeout reached - forcing loading to false');
-      setLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(hardTimeout);
-  }, []);
-
-  useEffect(() => {
-    async function getUser() {
-      try {
-        console.log('🔍 [Header] Starting auth check...');
-        const { data: { user }, error } = await supabase.auth.getUser();
-        
-        if (error) {
-          console.error('❌ [Header] Auth error:', error);
-        }
-        
-        console.log('👤 [Header] User:', user ? 'authenticated' : 'not authenticated');
-        setUser(user);
-        
-        if (user) {
-          // Fetch profile data
-          try {
-            const { data: profileData, error: profileError } = await supabase
-              .from('profiles')
-              .select('id, full_name, avatar_url, role, auth_user_id')
-              .eq('auth_user_id', user.id)
-              .single();
-            
-            if (profileError && profileError.code !== 'PGRST116') {
-              console.error('❌ [Header] Profile fetch error:', profileError);
-            } else {
-              console.log('✅ [Header] Profile loaded:', profileData?.full_name || 'No name', 'Role:', profileData?.role);
-              setProfile(profileData);
-            }
-          } catch (profileError) {
-            console.error('❌ [Header] Profile fetch failed:', profileError);
-          }
-        }
-        
-        setLoading(false);
-        console.log('✅ [Header] Auth check complete, loading set to false');
-      } catch (error) {
-        console.error('❌ [Header] Network error fetching user:', error);
-        setLoading(false);
-      }
-    }
-
-    // Set a backup timeout to prevent infinite loading
-    const timeout = setTimeout(() => {
-      console.log('⏰ [Header] Backup timeout reached, forcing loading to false');
-      setLoading(false);
-    }, 500);
-
-    getUser();
-
-    // Listen for profile updates using a custom event
-    const handleProfileUpdate = () => {
-      console.log('🔄 [Header] Profile update event received, refreshing...');
-      getUser();
-    };
-    
-    window.addEventListener('profileUpdated', handleProfileUpdate);
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('🔄 [Header] Auth state changed:', event, session?.user ? 'user present' : 'no user');
-        clearTimeout(timeout);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          // Fetch profile data
-          try {
-            const { data: profileData, error: profileError } = await supabase
-              .from('profiles')
-              .select('id, full_name, avatar_url, role, auth_user_id')
-              .eq('auth_user_id', session.user.id)
-              .single();
-            
-            if (profileError && profileError.code !== 'PGRST116') {
-              console.error('❌ [Header] Auth change profile error:', profileError);
-            } else {
-              console.log('✅ [Header] Auth change profile loaded:', profileData?.full_name || 'No name', 'Role:', profileData?.role);
-              setProfile(profileData);
-            }
-          } catch (profileError) {
-            console.error('❌ [Header] Auth change profile fetch failed:', profileError);
-          }
-        } else {
-          setProfile(null);
-        }
-        
-        setLoading(false);
-        console.log('✅ [Header] Auth state change complete, loading set to false');
-      }
-    );
-
-    return () => {
-      clearTimeout(timeout);
-      subscription.unsubscribe();
-      window.removeEventListener('profileUpdated', handleProfileUpdate);
-    };
-  }, [supabase]);
-
-  async function signOut() {
-    await supabase.auth.signOut();
+  const handleSignOut = async () => {
+    await signOut();
     setShowUserMenu(false);
-  }
+  };
 
   return (
     <header className="relative z-50 bg-white border-b border-gray-200">
@@ -264,7 +153,7 @@ export default function Header() {
                       )}
                       <hr className="my-1 border-gray-200" />
                       <button
-                        onClick={signOut}
+                        onClick={handleSignOut}
                         className="block w-full text-left px-4 py-2 text-sm text-neutral-text hover:bg-background-subtle transition-colors"
                       >
                         Sign Out
@@ -371,7 +260,7 @@ export default function Header() {
                   <div className="border-t border-gray-100 mt-4 pt-4">
                     <button
                       onClick={() => {
-                        signOut();
+                        handleSignOut();
                         setShowMobileMenu(false);
                       }}
                       className="block w-full text-left px-6 py-3 text-red-600 hover:bg-red-50 font-semibold transition-all duration-200 rounded-lg mx-3"

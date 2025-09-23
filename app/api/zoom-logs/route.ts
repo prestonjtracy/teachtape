@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -6,6 +6,80 @@ const logZoomClickSchema = z.object({
   booking_id: z.string().uuid(),
   action_type: z.enum(['start_meeting', 'join_meeting']),
 });
+
+export async function GET(request: NextRequest) {
+  try {
+    console.log('🔍 [GET /api/zoom-logs] Request received');
+    
+    const supabase = createClient();
+    const adminSupabase = createAdminClient();
+    
+    // Get current user and verify admin access
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.error('❌ [GET /api/zoom-logs] Auth error:', authError);
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user profile to check admin status
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, role')
+      .eq('auth_user_id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      console.error('❌ [GET /api/zoom-logs] Profile error:', profileError);
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    // Check if user is admin
+    if (profile.role !== 'admin') {
+      console.error('❌ [GET /api/zoom-logs] Access denied - not admin');
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
+    console.log('✅ [GET /api/zoom-logs] Admin access verified');
+
+    // Fetch zoom logs using admin client to bypass RLS
+    const { data: logs, error: logsError } = await adminSupabase
+      .from('zoom_session_logs')
+      .select(`
+        id,
+        booking_id,
+        action_type,
+        user_agent,
+        ip_address,
+        created_at,
+        coach_id,
+        athlete_id
+      `)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (logsError) {
+      console.error('❌ [GET /api/zoom-logs] Error fetching logs:', logsError);
+      return NextResponse.json({ 
+        error: 'Failed to fetch logs',
+        details: logsError.message 
+      }, { status: 500 });
+    }
+
+    console.log('✅ [GET /api/zoom-logs] Successfully fetched', logs?.length || 0, 'logs');
+
+    return NextResponse.json({
+      logs: logs || [],
+      count: logs?.length || 0
+    });
+
+  } catch (error) {
+    console.error('❌ [GET /api/zoom-logs] Unexpected error:', error);
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {

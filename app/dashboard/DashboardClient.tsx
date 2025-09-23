@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import CoachDashboard from "@/components/dashboard/CoachDashboard";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/auth/AuthContext";
 
 interface Booking {
   id: string;
@@ -46,107 +47,85 @@ interface DashboardClientProps {
 }
 
 export default function DashboardClient() {
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, profile, loading: authLoading } = useAuth();
   const [coachBookings, setCoachBookings] = useState<Booking[]>([]);
   const [coachEarnings, setCoachEarnings] = useState<EarningsSummary>({ last7Days: 0, monthToDate: 0, allTime: 0 });
   const [stripeStatus, setStripeStatus] = useState<StripeAccountStatus>({ accountId: null, chargesEnabled: false, needsOnboarding: true });
+  const [dashboardLoading, setDashboardLoading] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
-    async function fetchUserAndProfile() {
+    async function fetchCoachData() {
+      if (!profile || profile.role !== 'coach') return;
+      
+      setDashboardLoading(true);
       try {
-        console.log('🔍 [Dashboard] Starting to fetch user and profile...');
-        const { data: { user } } = await supabase.auth.getUser();
-        console.log('👤 [Dashboard] User:', user ? 'authenticated' : 'not authenticated');
-        setUser(user);
+        console.log('🔍 [Dashboard] Fetching coach-specific data...');
         
-        if (user) {
-          const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('id, full_name, role')
-            .eq('auth_user_id', user.id)
-            .single();
+        // Get coach data
+        const { data: coach } = await supabase
+          .from('coaches')
+          .select('id, stripe_account_id')
+          .eq('profile_id', profile.id)
+          .single();
+
+        // Fetch bookings
+        const { data: bookingsData } = await supabase
+          .from('bookings')
+          .select(`
+            id,
+            created_at,
+            customer_email,
+            amount_paid_cents,
+            status,
+            listing_id,
+            stripe_session_id,
+            listing:listings(title)
+          `)
+          .eq('coach_id', profile.id)
+          .order('created_at', { ascending: false });
+
+        if (bookingsData) {
+          setCoachBookings(bookingsData as unknown as Booking[]);
           
-          console.log('📋 [Dashboard] Profile data:', profileData, 'Error:', profileError);
-          setProfile(profileData);
+          // Calculate earnings
+          const now = new Date();
+          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
           
-          // If user is a coach, fetch coach-specific data
-          if (profileData?.role === 'coach') {
-            // Get coach data
-            const { data: coach } = await supabase
-              .from('coaches')
-              .select('id, stripe_account_id')
-              .eq('profile_id', profileData.id)
-              .single();
-
-            // Fetch bookings
-            const { data: bookingsData } = await supabase
-              .from('bookings')
-              .select(`
-                id,
-                created_at,
-                customer_email,
-                amount_paid_cents,
-                status,
-                listing_id,
-                stripe_session_id,
-                listing:listings(title)
-              `)
-              .eq('coach_id', profileData.id)
-              .order('created_at', { ascending: false });
-
-            if (bookingsData) {
-              setCoachBookings(bookingsData as unknown as Booking[]);
-              
-              // Calculate earnings
-              const now = new Date();
-              const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-              const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-              
-              const paidBookings = bookingsData.filter((b: any) => b.status === 'paid');
-              
-              setCoachEarnings({
-                last7Days: paidBookings
-                  .filter((b: any) => new Date(b.created_at) >= sevenDaysAgo)
-                  .reduce((sum: number, b: any) => sum + b.amount_paid_cents, 0),
-                monthToDate: paidBookings
-                  .filter((b: any) => new Date(b.created_at) >= monthStart)
-                  .reduce((sum: number, b: any) => sum + b.amount_paid_cents, 0),
-                allTime: paidBookings
-                  .reduce((sum: number, b: any) => sum + b.amount_paid_cents, 0)
-              });
-            }
-
-            // Set Stripe status
-            setStripeStatus({
-              accountId: coach?.stripe_account_id || null,
-              chargesEnabled: !!coach?.stripe_account_id,
-              needsOnboarding: !coach?.stripe_account_id
-            });
-          }
+          const paidBookings = bookingsData.filter((b: any) => b.status === 'paid');
+          
+          setCoachEarnings({
+            last7Days: paidBookings
+              .filter((b: any) => new Date(b.created_at) >= sevenDaysAgo)
+              .reduce((sum: number, b: any) => sum + b.amount_paid_cents, 0),
+            monthToDate: paidBookings
+              .filter((b: any) => new Date(b.created_at) >= monthStart)
+              .reduce((sum: number, b: any) => sum + b.amount_paid_cents, 0),
+            allTime: paidBookings
+              .reduce((sum: number, b: any) => sum + b.amount_paid_cents, 0)
+          });
         }
+
+        // Set Stripe status
+        setStripeStatus({
+          accountId: coach?.stripe_account_id || null,
+          chargesEnabled: !!coach?.stripe_account_id,
+          needsOnboarding: !coach?.stripe_account_id
+        });
       } catch (error) {
-        console.error('❌ [Dashboard] Error fetching user data:', error);
+        console.error('❌ [Dashboard] Error fetching coach data:', error);
       } finally {
-        console.log('✅ [Dashboard] Setting loading to false');
-        setLoading(false);
+        setDashboardLoading(false);
       }
     }
 
-    fetchUserAndProfile();
-    
-    // Force loading to false after 3 seconds to prevent infinite loading
-    const timeout = setTimeout(() => {
-      console.log('⏰ [Dashboard] Timeout reached, forcing loading to false');
-      setLoading(false);
-    }, 3000);
+    if (!authLoading && user && profile) {
+      fetchCoachData();
+    }
+  }, [user, profile, authLoading]);
 
-    return () => clearTimeout(timeout);
-  }, []);
-
-  if (loading) {
+  if (authLoading || dashboardLoading) {
     return (
       <div className="min-h-screen bg-background-subtle flex items-center justify-center">
         <div className="text-center">
@@ -224,12 +203,31 @@ export default function DashboardClient() {
 
   // If we reach here, there's an error - user should have a profile
   console.log('🚨 [Dashboard] Fallback case reached. User:', user ? 'exists' : 'null', 'Profile:', profile);
+  
+  // If no user, redirect to login
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background-subtle flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-neutral-text mb-4">Please sign in</h1>
+          <p className="text-neutral-text-secondary mb-6">
+            You need to be signed in to access the dashboard.
+          </p>
+          <Button asChild>
+            <Link href="/login">Sign In</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  
+  // If no profile, show profile setup
   return (
     <div className="min-h-screen bg-background-subtle flex items-center justify-center">
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-neutral-text mb-4">Unable to load dashboard</h1>
+        <h1 className="text-2xl font-bold text-neutral-text mb-4">Complete Your Profile</h1>
         <p className="text-neutral-text-secondary mb-6">
-          Please try refreshing the page or contact support if the issue persists.
+          Please complete your profile setup to access the dashboard.
         </p>
         <div className="text-sm text-gray-500 mb-4">
           Debug: User {user ? 'authenticated' : 'not found'}, Profile {profile ? `role: ${profile.role}` : 'not found'}
