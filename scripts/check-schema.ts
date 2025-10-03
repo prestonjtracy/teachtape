@@ -28,7 +28,7 @@ async function checkSchema() {
     console.table(data);
 
     // Check if stripe_account_id exists
-    const hasStripeColumn = data?.some(col => col.column_name === 'stripe_account_id');
+    const hasStripeColumn = data?.some((col: any) => col.column_name === 'stripe_account_id');
     console.log(`\n💳 Has stripe_account_id column: ${hasStripeColumn ? '✅ YES' : '❌ NO'}`);
 
     if (!hasStripeColumn) {
