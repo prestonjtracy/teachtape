@@ -108,8 +108,9 @@ CREATE POLICY "Users can insert zoom session logs" ON zoom_session_logs
       
       if (bookings && bookings.length > 0) {
         console.log('📋 Recent bookings available for testing:');
-        bookings.forEach((booking, index) => {
-          console.log(`${index + 1}. Booking ${booking.id} (${booking.listing?.title}) at ${booking.created_at}`);
+        bookings.forEach((booking: any, index: number) => {
+          const listingTitle = Array.isArray(booking.listing) ? booking.listing[0]?.title : booking.listing?.title;
+          console.log(`${index + 1}. Booking ${booking.id} (${listingTitle}) at ${booking.created_at}`);
         });
         console.log('\n💡 Try clicking Zoom buttons in the chat for these bookings to generate logs');
       } else {
