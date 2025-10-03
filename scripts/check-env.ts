@@ -12,7 +12,28 @@ function assertVars(vars: string[], scope: string) {
 }
 
 async function main() {
-  // Compare .env.local against .env.example
+  // Skip validation in production environments (Vercel, etc.) where env vars are provided differently
+  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    console.log("Production environment detected - skipping .env.local validation");
+
+    // Just verify critical vars are present in production
+    const required = {
+      server: [
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_WEBHOOK_SECRET",
+        "APP_URL",
+      ],
+      client: ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"],
+    };
+
+    assertVars(required.server, "server");
+    assertVars(required.client, "client");
+    console.log("All required environment variables are present.");
+    process.exit(0);
+  }
+
+  // Local development: Compare .env.local against .env.example
   const examplePath = path.resolve(".env.example");
   const localPath = path.resolve(".env.local");
 
