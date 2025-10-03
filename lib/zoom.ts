@@ -1,5 +1,11 @@
-// Zoom integration placeholder functions
-// TODO: Implement real Zoom OAuth and meeting creation
+/**
+ * Zoom Integration for TeachTape
+ *
+ * This module provides Zoom meeting creation and management for coaching sessions.
+ * It includes graceful fallback when Zoom credentials are not configured.
+ */
+
+import * as ZoomAPI from './zoom/api';
 
 export interface ZoomMeeting {
   join_url: string | null;
@@ -17,15 +23,21 @@ export interface ZoomMeetingRequest {
 }
 
 /**
- * Placeholder function to create a Zoom meeting
- * 
- * TODO: Implement real Zoom integration
- * 1. Set up Zoom OAuth app in Zoom Marketplace
- * 2. Store OAuth credentials in environment variables
- * 3. Implement OAuth flow for coaches to connect their Zoom accounts
- * 4. Use Zoom API to create meetings: https://developers.zoom.us/docs/api/rest/reference/zoom-api/methods/#operation/meetingCreate
- * 5. Handle webhook events for meeting lifecycle
- * 6. Store meeting credentials securely in database
+ * Check if Zoom integration is configured
+ */
+export function isZoomConfigured(): boolean {
+  return !!(
+    process.env.ZOOM_CLIENT_ID &&
+    process.env.ZOOM_CLIENT_SECRET &&
+    process.env.ZOOM_ACCOUNT_ID
+  );
+}
+
+/**
+ * Create a Zoom meeting for a coaching session
+ *
+ * If Zoom is not configured, returns null URLs with a warning.
+ * This allows the booking system to function without Zoom.
  */
 export async function createZoomMeeting(request: ZoomMeetingRequest): Promise<ZoomMeeting> {
   console.log(`🎥 [createZoomMeeting] Creating meeting for:`, {
@@ -36,79 +48,126 @@ export async function createZoomMeeting(request: ZoomMeetingRequest): Promise<Zo
     attendee_email: request.attendee_email
   });
 
-  console.log(`⚠️ [createZoomMeeting] TODO: Implement real Zoom OAuth integration`);
-  
-  // TODO: Replace with real Zoom API call
-  /*
-  const zoomClient = new ZoomClient({
-    clientId: process.env.ZOOM_CLIENT_ID!,
-    clientSecret: process.env.ZOOM_CLIENT_SECRET!,
-    redirectUri: process.env.ZOOM_REDIRECT_URI!
-  });
-  
-  const meeting = await zoomClient.meetings.create({
-    topic: request.topic,
-    type: 2, // Scheduled meeting
-    start_time: request.start_time.toISOString(),
-    duration: request.duration,
-    settings: {
-      host_video: true,
-      participant_video: true,
-      waiting_room: true,
-      mute_upon_entry: true,
-    }
-  });
-  
-  return {
-    join_url: meeting.join_url,
-    start_url: meeting.start_url,
-    meeting_id: meeting.id.toString(),
-    password: meeting.password
-  };
-  */
-  
-  // Return null for now - will be replaced with real implementation
-  return {
-    join_url: null,
-    start_url: null
-  };
+  // Check if Zoom is configured
+  if (!isZoomConfigured()) {
+    console.warn(`⚠️ [createZoomMeeting] Zoom credentials not configured. Meeting URLs will be null.`);
+    console.warn(`⚠️ To enable Zoom: Set ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET, and ZOOM_ACCOUNT_ID in your environment.`);
+
+    return {
+      join_url: null,
+      start_url: null,
+      meeting_id: undefined,
+      password: undefined
+    };
+  }
+
+  try {
+    // Call real Zoom API
+    const meeting = await ZoomAPI.createMeeting({
+      topic: request.topic,
+      start_time: request.start_time.toISOString(),
+      duration: request.duration,
+      coach_email: request.host_email || '',
+      athlete_name: request.attendee_email || undefined,
+    });
+
+    console.log(`✅ [createZoomMeeting] Meeting created successfully:`, meeting.id);
+
+    return {
+      join_url: meeting.join_url,
+      start_url: meeting.host_join_url,
+      meeting_id: meeting.id,
+      password: meeting.password
+    };
+  } catch (error) {
+    console.error(`❌ [createZoomMeeting] Failed to create meeting:`, error);
+
+    // Return null URLs on error to allow booking to continue
+    return {
+      join_url: null,
+      start_url: null,
+      meeting_id: undefined,
+      password: undefined
+    };
+  }
 }
 
 /**
- * Placeholder function to update a Zoom meeting
- * 
- * TODO: Implement real Zoom meeting updates
+ * Update an existing Zoom meeting
+ *
+ * If Zoom is not configured or update fails, returns null URLs.
  */
 export async function updateZoomMeeting(
-  meetingId: string, 
+  meetingId: string,
   updates: Partial<ZoomMeetingRequest>
 ): Promise<ZoomMeeting> {
   console.log(`🎥 [updateZoomMeeting] Updating meeting ${meetingId}:`, updates);
-  console.log(`⚠️ [updateZoomMeeting] TODO: Implement real Zoom API update`);
-  
-  // TODO: Replace with real Zoom API call
-  return {
-    join_url: null,
-    start_url: null
-  };
+
+  if (!isZoomConfigured()) {
+    console.warn(`⚠️ [updateZoomMeeting] Zoom not configured. Cannot update meeting.`);
+    return {
+      join_url: null,
+      start_url: null
+    };
+  }
+
+  try {
+    await ZoomAPI.updateMeeting(meetingId, {
+      topic: updates.topic,
+      start_time: updates.start_time?.toISOString(),
+      duration: updates.duration,
+      coach_email: updates.host_email || '',
+    });
+
+    // Get updated meeting details
+    const meeting = await ZoomAPI.getMeetingDetails(meetingId);
+
+    if (!meeting) {
+      throw new Error('Meeting not found after update');
+    }
+
+    console.log(`✅ [updateZoomMeeting] Meeting updated successfully`);
+
+    return {
+      join_url: meeting.join_url,
+      start_url: meeting.host_join_url,
+      meeting_id: meeting.id,
+      password: meeting.password
+    };
+  } catch (error) {
+    console.error(`❌ [updateZoomMeeting] Failed to update meeting:`, error);
+    return {
+      join_url: null,
+      start_url: null
+    };
+  }
 }
 
 /**
- * Placeholder function to delete a Zoom meeting
- * 
- * TODO: Implement real Zoom meeting deletion
+ * Delete a Zoom meeting
+ *
+ * If Zoom is not configured, logs a warning but doesn't fail.
  */
 export async function deleteZoomMeeting(meetingId: string): Promise<void> {
   console.log(`🎥 [deleteZoomMeeting] Deleting meeting ${meetingId}`);
-  console.log(`⚠️ [deleteZoomMeeting] TODO: Implement real Zoom API deletion`);
-  
-  // TODO: Replace with real Zoom API call
+
+  if (!isZoomConfigured()) {
+    console.warn(`⚠️ [deleteZoomMeeting] Zoom not configured. Cannot delete meeting.`);
+    return;
+  }
+
+  try {
+    await ZoomAPI.deleteMeeting(meetingId);
+    console.log(`✅ [deleteZoomMeeting] Meeting deleted successfully`);
+  } catch (error) {
+    console.error(`❌ [deleteZoomMeeting] Failed to delete meeting:`, error);
+    // Don't throw - allow the booking cancellation to proceed
+  }
 }
 
 /**
  * Generate a placeholder meeting URL for development/testing
- * 
- * TODO: Remove this when real Zoom integration is implemented
+ * Used when Zoom is not configured
  */
 export function generatePlaceholderMeetingUrl(bookingId: string): string {
   return `https://zoom.us/j/placeholder?booking=${bookingId}&pwd=placeholder`;

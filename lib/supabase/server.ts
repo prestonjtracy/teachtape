@@ -51,7 +51,24 @@ export function createClientForApiRoute(request: NextRequest) {
   )
 }
 
-// Service role client for admin operations
+/**
+ * SECURITY WARNING: Admin client bypasses Row Level Security (RLS)
+ *
+ * This client uses the service role key which grants elevated privileges
+ * and BYPASSES all Row Level Security policies in the database.
+ *
+ * ⚠️ ONLY use this client for:
+ *   - Admin operations requiring elevated privileges
+ *   - System operations that must bypass RLS
+ *   - Operations explicitly validated for admin access
+ *
+ * ❌ NEVER use this client for:
+ *   - User-facing API routes without admin role verification
+ *   - Operations where user-level RLS should apply
+ *   - Any code path that could be reached by non-admin users
+ *
+ * Always verify admin role BEFORE calling this function!
+ */
 export function createAdminClient() {
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

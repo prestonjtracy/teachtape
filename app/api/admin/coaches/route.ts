@@ -5,11 +5,11 @@ import { logAdminAction, AuditActions, getTargetIdentifier } from '@/lib/auditLo
 export async function POST(request: NextRequest) {
   try {
     const { coachId, action } = await request.json()
-    
+
     // Verify admin access
     const supabase = createClient()
     const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
+
     if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -23,6 +23,17 @@ export async function POST(request: NextRequest) {
 
     if (!profile || profile.role !== 'admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // SECURITY: Validate that coach exists before performing any action (IDOR protection)
+    const { data: coachExists, error: checkError } = await supabase
+      .from('coaches')
+      .select('id')
+      .eq('id', coachId)
+      .single()
+
+    if (checkError || !coachExists) {
+      return NextResponse.json({ error: 'Coach not found' }, { status: 404 })
     }
 
     const adminSupabase = createAdminClient()

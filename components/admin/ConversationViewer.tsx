@@ -75,7 +75,13 @@ export default function ConversationViewer({ conversation, onBack }: Conversatio
         return
       }
 
-      setMessages(data || [])
+      // Normalize sender data (Supabase returns array for foreign key relations)
+      const normalizedMessages = (data || []).map(msg => ({
+        ...msg,
+        sender: Array.isArray(msg.sender) ? msg.sender[0] || null : msg.sender
+      }))
+
+      setMessages(normalizedMessages)
     } catch (err) {
       setError('An error occurred while loading messages')
       console.error('Error:', err)

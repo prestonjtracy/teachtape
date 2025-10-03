@@ -143,7 +143,7 @@ export default function DashboardClient() {
         coach={{
           id: profile.id,
           profile_id: profile.id,
-          full_name: profile.full_name
+          full_name: profile.full_name || null
         }}
         bookings={coachBookings}
         earningsSummary={coachEarnings}

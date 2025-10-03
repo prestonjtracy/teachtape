@@ -125,18 +125,18 @@ export async function processPaymentIntentWebhook(paymentIntent: Stripe.PaymentI
 
     const paymentData: PaymentSyncData = {
       stripe_payment_intent_id: paymentIntent.id,
-      booking_id: bookingId,
-      booking_request_id: bookingRequestId,
+      booking_id: bookingId || undefined,
+      booking_request_id: bookingRequestId || undefined,
       coach_id: coachId,
-      athlete_id: athleteId,
+      athlete_id: athleteId || undefined,
       total_amount_cents: paymentIntent.amount,
       platform_fee_cents: feeBreakdown.platformFee,
       coach_amount_cents: feeBreakdown.coachAmount,
       stripe_fee_cents: 0, // Would need to get from Stripe fees API
       payment_status: paymentIntent.status as any,
       currency: paymentIntent.currency,
-      description: paymentIntent.description,
-      customer_email: paymentIntent.receipt_email
+      description: paymentIntent.description || undefined,
+      customer_email: paymentIntent.receipt_email || undefined
     }
 
     return await syncPaymentToDatabase(paymentData)

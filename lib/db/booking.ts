@@ -1,5 +1,6 @@
 import { createServerClient } from "@/supabase/server";
 import { z } from "zod";
+import type { Service as ServiceType } from "@/types/db";
 
 const UuidSchema = z.string().uuid("Invalid UUID format");
 const EmailSchema = z.string().email("Invalid email format");
@@ -18,16 +19,10 @@ export interface Coach {
   } | null;
 }
 
-export interface Service {
-  id: string;
-  coach_id: string;
-  title: string;
-  description: string | null;
-  duration_minutes: number;
-  price_cents: number;
-  currency: string;
-  active: boolean;
-}
+// Use Service type from types/db.ts, but allow partial data from Supabase queries
+export type Service = Omit<ServiceType, 'created_at'> & {
+  created_at?: string;
+};
 
 export interface Availability {
   id: string;
@@ -38,7 +33,7 @@ export interface Availability {
 }
 
 export interface CoachWithServices extends Coach {
-  services: Service[];
+  services: Omit<Service, 'coach_id'>[];
 }
 
 export interface DbResult<T> {
@@ -124,10 +119,16 @@ export async function getCoachWithServices(profileId: string): Promise<BookingRe
     }
 
     console.log(`✅ [getCoachWithServices] Coach found with ${coach.services.length} services`);
-    
+
+    // Normalize profile data (Supabase returns array for foreign key relations)
+    const normalizedCoach: CoachWithServices = {
+      ...coach,
+      profile: Array.isArray(coach.profile) ? coach.profile[0] || null : coach.profile
+    };
+
     return {
       success: true,
-      data: coach as CoachWithServices
+      data: normalizedCoach
     };
 
   } catch (error) {

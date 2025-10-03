@@ -32,10 +32,10 @@ export default async function CoachesPage() {
   const transformedCoaches = coaches?.map(coach => ({
     id: coach.id,
     profile_id: coach.profile_id,
-    full_name: coach.profile?.full_name || 'No name set',
+    full_name: (coach.profile as any)?.[0]?.full_name || 'No name set',
     sport: coach.sport,
-    bio: coach.profile?.bio,
-    avatar_url: coach.profile?.avatar_url,
+    bio: (coach.profile as any)?.[0]?.bio,
+    avatar_url: (coach.profile as any)?.[0]?.avatar_url,
     is_public: coach.is_public,
     stripe_connected: !!coach.stripe_account_id,
     stripe_account_id: coach.stripe_account_id,

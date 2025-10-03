@@ -59,9 +59,9 @@ export default async function ListingsPage() {
     price_cents: service.price_cents,
     is_active: service.active,
     created_at: service.created_at,
-    coach_name: service.coach?.profile?.full_name || 'Unknown Coach',
-    coach_avatar: service.coach?.profile?.avatar_url,
-    sport: service.coach?.sport,
+    coach_name: (service.coach as any)?.[0]?.profile?.[0]?.full_name || 'Unknown Coach',
+    coach_avatar: (service.coach as any)?.[0]?.profile?.[0]?.avatar_url,
+    sport: (service.coach as any)?.[0]?.sport,
     table_type: 'services' as const
   })) || []
 
@@ -74,9 +74,9 @@ export default async function ListingsPage() {
     price_cents: listing.price_cents,
     is_active: listing.is_active,
     created_at: listing.created_at,
-    coach_name: listing.coach?.full_name || 'Unknown Coach',
-    coach_avatar: listing.coach?.avatar_url,
-    sport: listing.coach?.sport,
+    coach_name: (listing.coach as any)?.[0]?.full_name || 'Unknown Coach',
+    coach_avatar: (listing.coach as any)?.[0]?.avatar_url,
+    sport: (listing.coach as any)?.[0]?.sport,
     table_type: 'listings' as const
   })) || []
 

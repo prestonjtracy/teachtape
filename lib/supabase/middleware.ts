@@ -29,17 +29,21 @@ export async function updateSession(request: NextRequest) {
   // issues with users being randomly logged out.
 
   let user = null;
+  let authError = false;
+
   try {
     const {
       data: { user: userData },
       error
     } = await supabase.auth.getUser()
-    
+
     if (error) {
       console.error('❌ [Middleware] Auth error:', error);
-      // Be more forgiving with auth errors - don't immediately fail
-      if (error.message && error.message.includes('session_missing')) {
-        // Allow request to continue, let client-side handle auth
+      authError = true;
+
+      // For session_missing errors on auth callback, allow through
+      if (error.message && error.message.includes('session_missing') &&
+          request.nextUrl.pathname.startsWith('/auth/callback')) {
         return supabaseResponse;
       }
     } else {
@@ -47,22 +51,19 @@ export async function updateSession(request: NextRequest) {
     }
   } catch (error) {
     console.error('❌ [Middleware] Network error getting user:', error);
-    // On network error, don't redirect - allow the request to continue
-    // This prevents users from being logged out due to temporary network issues
-    return supabaseResponse;
+    authError = true;
   }
 
-  // Only redirect to login for very specific protected routes and only if we're confident there's no user
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith('/auth') &&
-    !request.nextUrl.pathname.startsWith('/') && // Allow home page
-    !request.nextUrl.pathname.startsWith('/coaches') && // Allow coaches page
-    !request.nextUrl.pathname.startsWith('/api') && // Allow API routes
-    (request.nextUrl.pathname.startsWith('/admin/users') || // Only protect very sensitive admin pages
-     request.nextUrl.pathname.startsWith('/admin/settings'))
-  ) {
-    // Only redirect for highly sensitive pages
+  // SECURITY: Fail closed for protected routes
+  // Redirect to login if no authenticated user for protected routes
+  const isProtectedRoute =
+    request.nextUrl.pathname.startsWith('/dashboard') ||
+    request.nextUrl.pathname.startsWith('/admin') ||
+    request.nextUrl.pathname.startsWith('/my-profile') ||
+    request.nextUrl.pathname.startsWith('/my-listings');
+
+  if (!user && isProtectedRoute) {
+    // If there was an auth error on protected routes, fail closed (deny access)
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     url.searchParams.set('next', request.nextUrl.pathname)

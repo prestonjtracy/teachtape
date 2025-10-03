@@ -175,8 +175,8 @@ export default function AuditLogsTable({ initialLogs }: AuditLogsTableProps) {
         >
           <option value="all">All Target Types</option>
           {uniqueTargetTypes.map(type => (
-            <option key={type} value={type}>
-              {type?.charAt(0).toUpperCase() + type?.slice(1)}
+            <option key={type || 'unknown'} value={type || ''}>
+              {type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Unknown'}
             </option>
           ))}
         </select>

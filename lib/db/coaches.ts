@@ -84,19 +84,21 @@ export async function getCoachById(id: string): Promise<CoachResult<CoachWithLis
 
     if (!coachError && coachData) {
       // New structure found
+      const profileDataLog = (coachData.profile as any)?.[0];
       console.log(`✅ [getCoachById] Found coach in new structure:`, {
         id: coachData.id,
-        name: coachData.profile?.name || coachData.profile?.full_name,
+        name: profileDataLog?.name || profileDataLog?.full_name,
         servicesCount: coachData.services.length
       });
 
+      const profileData = (coachData.profile as any)?.[0];
       const result: CoachWithListings = {
         id: coachData.profile_id,
         coach_id: coachData.id, // Include the actual coaches table ID
-        full_name: coachData.profile?.name || coachData.profile?.full_name,
-        role: coachData.profile?.role,
-        avatar_url: coachData.profile?.avatar_url,
-        bio: coachData.profile?.bio,
+        full_name: profileData?.name || profileData?.full_name,
+        role: profileData?.role,
+        avatar_url: profileData?.avatar_url,
+        bio: profileData?.bio,
         sport: coachData.sport,
         listings: coachData.services.map(service => ({
           id: service.id,

@@ -38,6 +38,17 @@ export async function POST(request: NextRequest) {
     const statusField = tableType === 'services' ? 'active' : 'is_active'
     const titleField = tableType === 'services' ? 'name' : 'title'
 
+    // SECURITY: Validate that listing exists before performing any action (IDOR protection)
+    const { data: listingCheck, error: checkError } = await supabase
+      .from(tableName)
+      .select('id')
+      .eq('id', listingId)
+      .single()
+
+    if (checkError || !listingCheck) {
+      return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
+    }
+
     switch (action) {
       case 'deactivate':
         // Get listing info for audit log
@@ -59,11 +70,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Log the action
+        const deactivateTitle = (listingToDeactivate as any)?.[titleField] as string | undefined
         await logAdminAction(user.id, {
           action: AuditActions.LISTING_DEACTIVATED,
           targetType: 'listing',
           targetId: listingId,
-          targetIdentifier: listingToDeactivate?.[titleField] || 'Unknown Listing',
+          targetIdentifier: deactivateTitle || 'Unknown Listing',
           details: {
             table_type: tableType,
             previous_status: 'active',
@@ -92,11 +104,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Log the action
+        const activateTitle = (listingToActivate as any)?.[titleField] as string | undefined
         await logAdminAction(user.id, {
           action: AuditActions.LISTING_ACTIVATED,
           targetType: 'listing',
           targetId: listingId,
-          targetIdentifier: listingToActivate?.[titleField] || 'Unknown Listing',
+          targetIdentifier: activateTitle || 'Unknown Listing',
           details: {
             table_type: tableType,
             previous_status: 'deactivated',
@@ -125,11 +138,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Log the action
+        const deleteTitle = (listingToDelete as any)?.[titleField] as string | undefined
         await logAdminAction(user.id, {
           action: AuditActions.LISTING_DELETED,
           targetType: 'listing',
           targetId: listingId,
-          targetIdentifier: listingToDelete?.[titleField] || 'Unknown Listing',
+          targetIdentifier: deleteTitle || 'Unknown Listing',
           details: {
             table_type: tableType,
             deleted_at: new Date().toISOString()

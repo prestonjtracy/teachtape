@@ -103,6 +103,7 @@ export interface Message {
   sender_id: string | null;
   body: string;
   kind: string; // 'text', 'image', 'system', etc.
+  metadata?: any; // Optional metadata for system messages
   created_at: string;
 }
 

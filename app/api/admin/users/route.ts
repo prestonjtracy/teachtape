@@ -5,11 +5,11 @@ import { logAdminAction, AuditActions, getTargetIdentifier } from '@/lib/auditLo
 export async function POST(request: NextRequest) {
   try {
     const { userId, action } = await request.json()
-    
+
     // Verify admin access
     const supabase = createClient()
     const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
+
     if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -27,6 +27,13 @@ export async function POST(request: NextRequest) {
 
     // Use admin client for user management operations
     const adminSupabase = createAdminClient()
+
+    // SECURITY: Validate that user exists before performing any action (IDOR protection)
+    const { data: targetUserCheck, error: checkError } = await adminSupabase.auth.admin.getUserById(userId)
+
+    if (checkError || !targetUserCheck.user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
 
     switch (action) {
       case 'promote':

@@ -66,12 +66,12 @@ export default async function BookingsPage() {
     athlete_name: 'Customer', // Legacy bookings use customer_email, no profile link
     athlete_email: booking.customer_email,
     athlete_avatar: null,
-    coach_name: booking.coach?.full_name || 'Unknown Coach',
-    coach_avatar: booking.coach?.avatar_url,
+    coach_name: (booking.coach as any)?.[0]?.full_name || 'Unknown Coach',
+    coach_avatar: (booking.coach as any)?.[0]?.avatar_url,
     session_date: booking.starts_at,
     session_end: booking.ends_at,
     status: booking.status,
-    listing_title: booking.listing?.title || 'Unknown Listing',
+    listing_title: (booking.listing as any)?.[0]?.title || 'Unknown Listing',
     amount_paid: booking.amount_paid_cents,
     created_at: booking.created_at,
     table_type: 'bookings' as const
@@ -81,15 +81,15 @@ export default async function BookingsPage() {
   const transformedBookingRequests = bookingRequests?.map(request => ({
     id: request.id,
     booking_id: request.id,
-    athlete_name: request.athlete?.full_name || 'Unknown Athlete',
+    athlete_name: (request.athlete as any)?.[0]?.full_name || 'Unknown Athlete',
     athlete_email: null, // Booking requests don't store email directly
-    athlete_avatar: request.athlete?.avatar_url,
-    coach_name: request.coach?.full_name || 'Unknown Coach',
-    coach_avatar: request.coach?.avatar_url,
+    athlete_avatar: (request.athlete as any)?.[0]?.avatar_url,
+    coach_name: (request.coach as any)?.[0]?.full_name || 'Unknown Coach',
+    coach_avatar: (request.coach as any)?.[0]?.avatar_url,
     session_date: request.proposed_start,
     session_end: request.proposed_end,
     status: request.status,
-    listing_title: request.listing?.title || 'Unknown Listing',
+    listing_title: (request.listing as any)?.[0]?.title || 'Unknown Listing',
     amount_paid: null, // Requests don't have payment info until accepted
     created_at: request.created_at,
     table_type: 'booking_requests' as const

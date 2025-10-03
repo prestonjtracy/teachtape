@@ -75,17 +75,20 @@ export default async function PaymentsPage() {
         athlete_name: 'Customer',
         athlete_email: booking.customer_email,
         athlete_avatar: null,
-        coach_name: booking.coach?.full_name || 'Unknown Coach',
-        coach_avatar: booking.coach?.avatar_url,
-        coach_stripe_account: booking.coach?.stripe_account_id?.[0]?.stripe_account_id,
+        coach_name: (booking.coach as any)?.[0]?.full_name || 'Unknown Coach',
+        coach_avatar: (booking.coach as any)?.[0]?.avatar_url,
+        coach_stripe_account: (booking.coach as any)?.[0]?.stripe_account_id?.[0]?.stripe_account_id,
         amount: booking.amount_paid_cents,
         platform_fee: Math.floor(booking.amount_paid_cents * 0.1), // 10% platform fee
         coach_amount: booking.amount_paid_cents - Math.floor(booking.amount_paid_cents * 0.1),
         payment_status: booking.status === 'paid' ? 'succeeded' : booking.status,
-        payout_status: 'unknown',
+        payout_status: 'unknown' as const,
         date: booking.created_at,
-        listing_title: booking.listing?.title,
-        source: 'bookings'
+        listing_title: (booking.listing as any)?.[0]?.title,
+        source: 'bookings' as const,
+        payout_failed_reason: null,
+        payout_retry_count: 0,
+        stripe_transfer_id: null
       })) || []
     }
   }
@@ -94,11 +97,11 @@ export default async function PaymentsPage() {
   const transformedPayments = payments?.map(payment => ({
     id: payment.id,
     payment_id: payment.stripe_payment_intent_id || payment.stripe_session_id || payment.id,
-    athlete_name: payment.athlete?.full_name || 'Unknown Athlete',
+    athlete_name: (payment.athlete as any)?.[0]?.full_name || 'Unknown Athlete',
     athlete_email: payment.customer_email,
-    athlete_avatar: payment.athlete?.avatar_url,
-    coach_name: payment.coach?.full_name || 'Unknown Coach',
-    coach_avatar: payment.coach?.avatar_url,
+    athlete_avatar: (payment.athlete as any)?.[0]?.avatar_url,
+    coach_name: (payment.coach as any)?.[0]?.full_name || 'Unknown Coach',
+    coach_avatar: (payment.coach as any)?.[0]?.avatar_url,
     coach_stripe_account: null, // Would need to join with coaches table
     amount: payment.total_amount_cents,
     platform_fee: payment.platform_fee_cents,
@@ -110,7 +113,7 @@ export default async function PaymentsPage() {
     stripe_transfer_id: payment.stripe_transfer_id,
     date: payment.created_at,
     listing_title: payment.description,
-    source: 'payments'
+    source: 'payments' as const
   })) || []
 
   const allPayments = transformedPayments.length > 0 ? transformedPayments : fallbackPayments || []

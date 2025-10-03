@@ -7,11 +7,19 @@ export async function POST(req: NextRequest) {
   console.log('🔄 [POST /api/cron/expire-requests] Starting request expiration job');
   
   try {
-    // Verify cron secret for security (optional but recommended)
+    // SECURITY: Verify cron secret (MANDATORY)
     const cronSecret = req.headers.get('authorization');
     const expectedSecret = process.env.CRON_SECRET;
-    
-    if (expectedSecret && cronSecret !== `Bearer ${expectedSecret}`) {
+
+    if (!expectedSecret) {
+      console.error('❌ [POST /api/cron/expire-requests] CRON_SECRET not configured - cron authentication disabled!');
+      return NextResponse.json(
+        { error: "Server misconfigured" },
+        { status: 500 }
+      );
+    }
+
+    if (cronSecret !== `Bearer ${expectedSecret}`) {
       console.error('❌ [POST /api/cron/expire-requests] Unauthorized cron request');
       return NextResponse.json(
         { error: "Unauthorized" },
@@ -99,9 +107,18 @@ export async function POST(req: NextRequest) {
 
         // Send email notification to athlete
         try {
-          const { data: athleteAuth } = await supabase.auth.admin.getUserById(request.athlete.auth_user_id);
-          const { data: coachAuth } = await supabase.auth.admin.getUserById(request.coach.auth_user_id);
-          
+          const athleteData = (request.athlete as any)?.[0];
+          const coachData = (request.coach as any)?.[0];
+          const listingData = (request.listing as any)?.[0];
+
+          if (!athleteData?.auth_user_id || !coachData?.auth_user_id) {
+            console.warn(`⚠️ Missing athlete or coach data for request ${request.id}`);
+            continue;
+          }
+
+          const { data: athleteAuth } = await supabase.auth.admin.getUserById(athleteData.auth_user_id);
+          const { data: coachAuth } = await supabase.auth.admin.getUserById(coachData.auth_user_id);
+
           const athleteEmail = athleteAuth.user?.email;
           const coachEmail = coachAuth.user?.email;
 
@@ -109,13 +126,13 @@ export async function POST(req: NextRequest) {
             const emailData = {
               requestId: request.id,
               athleteEmail: athleteEmail,
-              athleteName: request.athlete.full_name || undefined,
-              coachName: request.coach.full_name || 'Coach',
+              athleteName: athleteData.full_name || undefined,
+              coachName: coachData.full_name || 'Coach',
               coachEmail: coachEmail,
-              listingTitle: request.listing.title,
+              listingTitle: listingData?.title || 'Session',
               listingDescription: undefined,
               duration: undefined,
-              priceCents: request.listing.price_cents,
+              priceCents: listingData?.price_cents || 0,
               proposedStart: new Date(request.proposed_start),
               proposedEnd: new Date(request.proposed_end),
               timezone: request.timezone,

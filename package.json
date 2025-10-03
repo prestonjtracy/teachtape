@@ -16,7 +16,9 @@
     "seed:coaches": "tsx scripts/seed-coaches.ts",
     "seed": "tsx scripts/seed.ts",
     "test:booking": "tsx scripts/test_booking_e2e.ts",
-    "dev:all": "concurrently \"next dev\" \"stripe listen --forward-to localhost:3000/api/stripe/webhook\""
+    "dev:all": "concurrently \"next dev\" \"stripe listen --forward-to localhost:3000/api/stripe/webhook\"",
+    "predeploy": "npm run typecheck && npm run build",
+    "deploy:check": "tsx scripts/pre-deployment-check.ts"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^4.0.0",
@@ -27,6 +29,7 @@
     "@supabase/supabase-js": "2.45.4",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.2",
+    "isomorphic-dompurify": "^2.28.0",
     "next": "14.2.5",
     "nodemailer": "^6.9.13",
     "react": "18.3.1",

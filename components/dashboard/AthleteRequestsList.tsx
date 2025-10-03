@@ -76,7 +76,14 @@ export default function AthleteRequestsList({ athleteId }: Props) {
         return;
       }
 
-      setRequests(data || []);
+      // Normalize listing and coach data (Supabase returns array for foreign key relations)
+      const normalizedRequests = (data || []).map(req => ({
+        ...req,
+        listing: Array.isArray(req.listing) ? req.listing[0] : req.listing,
+        coach: Array.isArray(req.coach) ? req.coach[0] : req.coach
+      }));
+
+      setRequests(normalizedRequests);
     } catch (error) {
       console.error('Error fetching requests:', error);
     } finally {

@@ -53,14 +53,14 @@ export async function GET(req: NextRequest) {
     // Transform the data to match the expected format
     const transformedBookings = bookings?.map(booking => ({
       ...booking,
-      coach: booking.coach ? {
-        full_name: booking.coach.full_name,
-        avatar_url: booking.coach.avatar_url
+      coach: (booking.coach as any)?.[0] ? {
+        full_name: (booking.coach as any)[0].full_name,
+        avatar_url: (booking.coach as any)[0].avatar_url
       } : null,
-      listing: booking.listings ? {
-        title: booking.listings.title,
-        duration_minutes: booking.listings.duration_minutes,
-        description: booking.listings.description
+      listing: (booking.listings as any)?.[0] ? {
+        title: (booking.listings as any)[0].title,
+        duration_minutes: (booking.listings as any)[0].duration_minutes,
+        description: (booking.listings as any)[0].description
       } : null
     })) || [];
 

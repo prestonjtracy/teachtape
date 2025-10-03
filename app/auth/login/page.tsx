@@ -84,11 +84,11 @@ export default function LoginPage() {
         <div className="text-center">
           <Link href="/" className="inline-block mb-6">
             <Image
-              src="/logo-full.svg"
+              src="/teachtape-logo-full.png"
               alt="TeachTape"
-              width={200}
-              height={60}
-              className="mx-auto"
+              width={400}
+              height={120}
+              className="mx-auto h-24 w-auto"
             />
           </Link>
           <h2 className="text-3xl font-bold text-neutral-text">

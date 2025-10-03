@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate file
+    // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
         { error: "File size must be less than 5MB" },
@@ -91,6 +91,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // SECURITY: Validate file content type (check magic bytes, not just MIME type)
+    const fileBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(fileBuffer);
+
+    // Check magic bytes for valid image formats
+    const isValidJPEG = uint8Array[0] === 0xFF && uint8Array[1] === 0xD8 && uint8Array[2] === 0xFF;
+    const isValidPNG = uint8Array[0] === 0x89 && uint8Array[1] === 0x50 && uint8Array[2] === 0x4E && uint8Array[3] === 0x47;
+    const isValidWebP = uint8Array[0] === 0x52 && uint8Array[1] === 0x49 && uint8Array[2] === 0x46 && uint8Array[3] === 0x46;
+
+    if (!isValidJPEG && !isValidPNG && !isValidWebP) {
+      return NextResponse.json(
+        { error: "Invalid image file format. Only JPEG, PNG, and WebP are allowed." },
+        { status: 400 }
+      );
+    }
+
+    // Also check MIME type as secondary validation
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
       return NextResponse.json(
         { error: "File type must be JPG, PNG, or WebP" },
@@ -105,7 +122,7 @@ export async function POST(req: NextRequest) {
       } catch (error) {
         if (error instanceof z.ZodError) {
           return NextResponse.json(
-            { 
+            {
               error: "Invalid caption",
               details: error.errors
             },
@@ -122,13 +139,18 @@ export async function POST(req: NextRequest) {
       has_caption: !!caption
     });
 
-    // Generate unique filename
-    const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    // Determine correct file extension based on magic bytes
+    let fileExtension = 'jpg';
+    if (isValidPNG) {
+      fileExtension = 'png';
+    } else if (isValidWebP) {
+      fileExtension = 'webp';
+    }
+
     const fileName = `${crypto.randomUUID()}.${fileExtension}`;
     const filePath = `${profile.id}/${fileName}`;
 
-    // Upload file to Supabase storage
-    const fileBuffer = await file.arrayBuffer();
+    // Upload file to Supabase storage (fileBuffer already loaded above)
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('coach-gallery')
       .upload(filePath, fileBuffer, {

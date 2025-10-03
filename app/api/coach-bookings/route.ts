@@ -37,9 +37,9 @@ export async function GET(req: NextRequest) {
     // Transform the data to match the expected format
     const transformedBookings = bookings?.map(booking => ({
       ...booking,
-      listing: booking.listings ? {
-        title: booking.listings.title,
-        duration_minutes: booking.listings.duration_minutes
+      listing: (booking.listings as any)?.[0] ? {
+        title: (booking.listings as any)[0].title,
+        duration_minutes: (booking.listings as any)[0].duration_minutes
       } : null
     })) || [];
 

@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 import { sendBookingEmailsAsync } from "@/lib/email";
 import { getFeeBreakdown } from "@/lib/stripeFees";
+import { BookingEmailData } from "@/lib/emailTemplates";
 
 // Force Node.js runtime for webhook handling
 export const runtime = "nodejs";
@@ -41,7 +42,9 @@ export async function POST(req: NextRequest) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    // Convert ArrayBuffer to Buffer for Stripe
+    const buffer = Buffer.from(rawBody);
+    event = stripe.webhooks.constructEvent(buffer, signature, webhookSecret);
     console.log(`✅ Webhook signature verified for event: ${event.type}`);
   } catch (error) {
     console.error("❌ Webhook signature verification failed:", error);
@@ -273,26 +276,26 @@ async function sendBookingConfirmationEmails(session: Stripe.Checkout.Session, b
   const feeBreakdown = getFeeBreakdown(session.amount_total || 0);
 
   // Prepare email data
-  const emailData = {
+  const emailData: BookingEmailData = {
     sessionId: session.id,
     bookingId: bookingId,
-    
+
     athleteEmail: session.customer_details?.email || '',
-    athleteName: session.customer_details?.name,
-    
+    athleteName: session.customer_details?.name || undefined,
+
     coachName: coach.full_name || 'Coach',
-    coachEmail: coachEmail,
-    
+    coachEmail: coachEmail || undefined,
+
     listingTitle: listing.title || 'Coaching Session',
-    listingDescription: listing.description,
+    listingDescription: listing.description || undefined,
     duration: listing.duration_minutes || 60,
-    
+
     amountPaid: session.amount_total || 0,
     currency: session.currency || 'usd',
     platformFee: feeBreakdown.platformFee,
-    
+
     bookedAt: new Date(),
-    
+
     nextSteps: "The coach will contact you within 24 hours to schedule your session."
   };
 

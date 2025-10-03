@@ -54,7 +54,9 @@ export default function PaymentCompletePage() {
               // Redirect to complete authentication
               const { error: confirmError } = await stripe.confirmPayment({
                 clientSecret,
-                return_url: window.location.href,
+                confirmParams: {
+                  return_url: window.location.href,
+                }
               });
               if (confirmError) {
                 setStatus('error');

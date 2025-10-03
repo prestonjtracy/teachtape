@@ -37,12 +37,16 @@ export async function POST(request: NextRequest) {
     const tableName = tableType
     let updateData: any = {}
 
-    // Get booking info for audit log before updating
-    const { data: booking } = await supabase
+    // SECURITY: Validate that booking exists before performing any action (IDOR protection)
+    const { data: booking, error: checkError } = await supabase
       .from(tableName)
       .select('*')
       .eq('id', bookingId)
       .single()
+
+    if (checkError || !booking) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+    }
 
     switch (action) {
       case 'cancel':

@@ -93,9 +93,17 @@ export async function POST(req: NextRequest) {
       .eq('profile_id', listing.coach_id)
       .single();
 
-    // In development mode, skip Stripe account validation
-    const isDevelopment = process.env.DEVELOPMENT_MODE === 'true';
-    
+    // SECURITY: Prevent development mode in production
+    const isDevelopment = process.env.DEVELOPMENT_MODE === 'true' && process.env.NODE_ENV !== 'production';
+
+    if (process.env.DEVELOPMENT_MODE === 'true' && process.env.NODE_ENV === 'production') {
+      console.error('❌ [POST /api/checkout] CRITICAL: DEVELOPMENT_MODE cannot be enabled in production!');
+      return new Response(
+        JSON.stringify({ error: "Server misconfigured" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     if (!isDevelopment && (coachError || !coachData || !coachData.stripe_account_id)) {
       console.error(`❌ [POST /api/checkout] Coach Stripe account not found:`, {
         coachId: listing.coach_id,
@@ -123,6 +131,14 @@ export async function POST(req: NextRequest) {
 
     // Verify coach's Stripe account is ready to receive payments (skip in development)
     if (!isDevelopment) {
+      if (!coachData?.stripe_account_id) {
+        console.error(`❌ [POST /api/checkout] Coach has no Stripe account configured`);
+        return new Response(
+          JSON.stringify({ error: "Coach payment setup incomplete - no Stripe account" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
       try {
         const account = await stripe.accounts.retrieve(coachData.stripe_account_id);
         
@@ -216,6 +232,11 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // TypeScript assertion: coachData is guaranteed to be non-null here due to earlier checks
+      if (!coachData) {
+        throw new Error("Coach data unexpectedly null");
+      }
+
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         line_items: [{
@@ -289,7 +310,12 @@ export async function POST(req: NextRequest) {
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
-    
+
+    // Ensure coachData is not null before proceeding
+    if (!coachData) {
+      throw new Error("Coach data unexpectedly null");
+    }
+
     console.log(`💰 [POST /api/checkout] Payment breakdown:`, {
       listingPrice: rateCents,
       athleteServiceFee: totalAthleteFee,

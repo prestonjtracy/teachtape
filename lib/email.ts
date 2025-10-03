@@ -18,7 +18,7 @@ export async function sendEmailSMTP(to: string, subject: string, html: string) {
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
   if (!host || !user || !pass) throw new Error("SMTP credentials missing");
-  const transporter = nodemailer.createTransporter({ host, port, auth: { user, pass } });
+  const transporter = nodemailer.createTransport({ host, port, auth: { user, pass } });
   await transporter.sendMail({ from, to, subject, html });
 }
 

@@ -106,29 +106,37 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Send email notification to athlete (fire-and-forget)
     try {
-      const { data: athleteAuth } = await supabase.auth.admin.getUserById(bookingRequest.athlete.auth_user_id);
-      const athleteEmail = athleteAuth.user?.email;
+      const athleteData = (bookingRequest.athlete as any)?.[0];
+      const coachData = (bookingRequest.coach as any)?.[0];
+      const listingData = (bookingRequest.listing as any)?.[0];
 
-      if (athleteEmail) {
-        const emailData = {
-          requestId: requestId,
-          athleteEmail: athleteEmail,
-          athleteName: bookingRequest.athlete.full_name || undefined,
-          coachName: bookingRequest.coach.full_name || 'Coach',
-          coachEmail: user.email!,
-          listingTitle: bookingRequest.listing.title,
-          listingDescription: undefined,
-          duration: undefined,
-          priceCents: bookingRequest.listing.price_cents,
-          proposedStart: new Date(bookingRequest.proposed_start),
-          proposedEnd: new Date(bookingRequest.proposed_end),
-          timezone: bookingRequest.timezone,
-          requestedAt: new Date(),
-          chatUrl: `${process.env.APP_URL || 'https://teachtape.local'}/messages/${bookingRequest.conversation_id}`
-        };
+      if (!athleteData?.auth_user_id) {
+        console.warn('⚠️ Missing athlete auth_user_id for request:', requestId);
+      } else {
+        const { data: athleteAuth } = await supabase.auth.admin.getUserById(athleteData.auth_user_id);
+        const athleteEmail = athleteAuth.user?.email;
 
-        sendBookingRequestEmailsAsync(emailData, 'declined');
-        console.log('📧 [POST /api/requests/decline] Email notification queued for athlete');
+        if (athleteEmail) {
+          const emailData = {
+            requestId: requestId,
+            athleteEmail: athleteEmail,
+            athleteName: athleteData.full_name || undefined,
+            coachName: coachData?.full_name || 'Coach',
+            coachEmail: user.email!,
+            listingTitle: listingData?.title || 'Session',
+            listingDescription: undefined,
+            duration: undefined,
+            priceCents: listingData?.price_cents || 0,
+            proposedStart: new Date(bookingRequest.proposed_start),
+            proposedEnd: new Date(bookingRequest.proposed_end),
+            timezone: bookingRequest.timezone,
+            requestedAt: new Date(),
+            chatUrl: `${process.env.APP_URL || 'https://teachtape.local'}/messages/${bookingRequest.conversation_id}`
+          };
+
+          sendBookingRequestEmailsAsync(emailData, 'declined');
+          console.log('📧 [POST /api/requests/decline] Email notification queued for athlete');
+        }
       }
     } catch (emailError) {
       console.warn('⚠️ [POST /api/requests/decline] Failed to send email notification:', emailError);

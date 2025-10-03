@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { MessageWithSender } from '@/types/db';
 import { cn } from '@/lib/utils';
+import DOMPurify from 'isomorphic-dompurify';
 
 interface ChatThreadProps {
   conversationId: string;
@@ -369,11 +370,17 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
         );
       } else {
         // Regular text - preserve line breaks and render HTML for bold formatting
+        // Sanitize HTML to prevent XSS attacks - only allow <strong> and <b> tags
+        const sanitizedHtml = DOMPurify.sanitize(part, {
+          ALLOWED_TAGS: ['strong', 'b'],
+          ALLOWED_ATTR: [],
+        });
+
         return (
-          <span 
-            key={index} 
+          <span
+            key={index}
             className="whitespace-pre-wrap"
-            dangerouslySetInnerHTML={{ __html: part }}
+            dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
           />
         );
       }
