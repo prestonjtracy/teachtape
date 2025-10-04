@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
+export const dynamic = 'force-dynamic';
+
 const GetGalleryParamsSchema = z.object({
   coachId: z.string().uuid("Invalid coach ID").optional(),
 });
