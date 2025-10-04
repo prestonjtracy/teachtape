@@ -1,82 +1,60 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
+  const response = NextResponse.next({
     request,
   })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            request.cookies.set(name, value)
-            supabaseResponse.cookies.set(name, value, options)
-          })
-        },
-      },
-    }
-  )
+  // Get all cookies to find the Supabase auth token
+  const allCookies = request.cookies.getAll()
+  const authCookie = allCookies.find(cookie => cookie.name.includes('-auth-token'))
 
-  // IMPORTANT: Avoid writing any logic between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
+  let hasValidAuth = false
 
-  let user = null;
-  let authError = false;
+  if (authCookie?.value) {
+    try {
+      // Parse the auth cookie to check if there's an access token
+      const parsed = JSON.parse(decodeURIComponent(authCookie.value))
+      const accessToken = parsed.access_token || parsed[0]?.access_token
 
-  try {
-    const {
-      data: { user: userData },
-      error
-    } = await supabase.auth.getUser()
+      if (accessToken) {
+        // Basic JWT structure check (not full validation)
+        const parts = accessToken.split('.')
+        if (parts.length === 3) {
+          // Decode payload to check expiration
+          const payload = JSON.parse(atob(parts[1]))
+          const now = Math.floor(Date.now() / 1000)
 
-    if (error) {
-      console.error('❌ [Middleware] Auth error:', error);
-      authError = true;
-
-      // For session_missing errors on auth callback, allow through
-      if (error.message && error.message.includes('session_missing') &&
-          request.nextUrl.pathname.startsWith('/auth/callback')) {
-        return supabaseResponse;
+          // Check if token is not expired
+          if (payload.exp && payload.exp > now) {
+            hasValidAuth = true
+          }
+        }
       }
-    } else {
-      user = userData;
+    } catch (error) {
+      // Invalid token format, treat as unauthenticated
+      console.error('❌ [Middleware] Invalid auth token:', error)
     }
-  } catch (error) {
-    console.error('❌ [Middleware] Network error getting user:', error);
-    authError = true;
+  }
+
+  // Allow auth callback through regardless of auth state
+  if (request.nextUrl.pathname.startsWith('/auth/callback')) {
+    return response
   }
 
   // SECURITY: Fail closed for protected routes
-  // Redirect to login if no authenticated user for protected routes
   const isProtectedRoute =
     request.nextUrl.pathname.startsWith('/dashboard') ||
     request.nextUrl.pathname.startsWith('/admin') ||
     request.nextUrl.pathname.startsWith('/my-profile') ||
-    request.nextUrl.pathname.startsWith('/my-listings');
+    request.nextUrl.pathname.startsWith('/my-listings')
 
-  if (!user && isProtectedRoute) {
-    // If there was an auth error on protected routes, fail closed (deny access)
+  if (!hasValidAuth && isProtectedRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     url.searchParams.set('next', request.nextUrl.pathname)
     return NextResponse.redirect(url)
   }
 
-  // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
-  // creating a new response object with NextResponse.next() make sure to:
-  // 1. Pass the request in it, like so:
-  //    const myNewResponse = NextResponse.next({ request })
-  // 2. Copy over the cookies, like so:
-  //    myNewResponse.cookies.setAll(supabaseResponse.cookies.getAll())
-  // 3. Change the myNewResponse object instead of the supabaseResponse object
-
-  return supabaseResponse
+  return response
 }
