@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { getAvailabilitiesForCoach } from "@/lib/db/booking";
 import { z } from "zod";
 
+export const dynamic = 'force-dynamic';
+
 const QuerySchema = z.object({
   coachId: z.string().uuid("Invalid coach ID"),
   from: z.string().datetime("Invalid from date"),

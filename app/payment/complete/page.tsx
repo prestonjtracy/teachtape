@@ -1,17 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-export default function PaymentCompletePage() {
+function PaymentCompleteContent() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Processing payment...');
   const searchParams = useSearchParams();
   const router = useRouter();
-  
+
   const clientSecret = searchParams.get('payment_intent_client_secret');
   const conversationId = searchParams.get('conversation_id');
 
@@ -92,21 +92,21 @@ export default function PaymentCompletePage() {
             <div className="text-red-600 text-6xl mb-4">❌</div>
           )}
         </div>
-        
+
         <h1 className="text-2xl font-bold text-gray-900 mb-4">
           {status === 'loading' && 'Processing Payment'}
           {status === 'success' && 'Payment Successful'}
           {status === 'error' && 'Payment Failed'}
         </h1>
-        
+
         <p className="text-gray-600 mb-6">{message}</p>
-        
+
         {status === 'success' && conversationId && (
           <p className="text-sm text-gray-500 mb-4">
             Redirecting to your conversation in a few seconds...
           </p>
         )}
-        
+
         <div className="space-y-3">
           {conversationId && (
             <button
@@ -116,7 +116,7 @@ export default function PaymentCompletePage() {
               Go to Chat
             </button>
           )}
-          
+
           <button
             onClick={() => router.push('/dashboard')}
             className="w-full bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition-colors"
@@ -126,5 +126,17 @@ export default function PaymentCompletePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PaymentCompletePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
+      </div>
+    }>
+      <PaymentCompleteContent />
+    </Suspense>
   );
 }
