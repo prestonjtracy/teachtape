@@ -8,6 +8,8 @@ import { Select } from "@/components/ui/Select";
 import Image from "next/image";
 import Link from "next/link";
 
+export const dynamic = 'force-dynamic';
+
 export default function SignupPage() {
   const router = useRouter();
   const searchParams = useSearchParams();

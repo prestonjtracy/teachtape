@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CoachCardSkeleton } from "@/components/ui/Loading";
 
+export const dynamic = 'force-dynamic';
+
 interface Profile {
   id: string;
   full_name: string | null;
