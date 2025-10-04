@@ -85,3 +85,4 @@ Set the following variables in Vercel. "Preview" refers to Preview Deployments; 
 | `SMTP_PORT` | SMTP port | Optional | Optional |
 | `SMTP_USER` | SMTP username | Optional | Optional |
 | `SMTP_PASS` | SMTP password | Optional | Optional |
+# Force Vercel rebuild
