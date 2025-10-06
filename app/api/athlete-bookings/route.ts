@@ -1,24 +1,28 @@
-import { NextRequest } from "next/server";
-import { createServerClient } from "@/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/server";
 
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const url = new URL(req.url);
-    const email = url.searchParams.get('email');
-    
-    if (!email) {
-      return new Response(
-        JSON.stringify({ error: "Email parameter is required" }), 
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+    // SECURITY: Require authentication
+    const { user, error: authError } = await requireAuth();
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: authError.status });
     }
 
-    const supabase = createServerClient();
-    
-    // Get bookings for this email with coach and listing details
+    // SECURITY: Only allow users to see their own bookings
+    // Get user's email from authenticated session
+    const userEmail = user.email;
+    if (!userEmail) {
+      return NextResponse.json({ error: "User email not found" }, { status: 400 });
+    }
+
+    const supabase = createClient();
+
+    // Get bookings for authenticated user's email only
     const { data: bookings, error } = await supabase
       .from("bookings")
       .select(`
@@ -40,7 +44,7 @@ export async function GET(req: NextRequest) {
           description
         )
       `)
-      .eq('customer_email', email)
+      .eq('customer_email', userEmail)
       .order('created_at', { ascending: false });
 
     if (error) {

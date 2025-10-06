@@ -1,14 +1,32 @@
-import { NextRequest } from "next/server";
-import { createServerClient } from "@/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/server";
 
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createServerClient();
-    
-    // For now, get all bookings (in production, you'd filter by authenticated coach)
+    // SECURITY: Require authentication
+    const { user, error: authError } = await requireAuth();
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: authError.status });
+    }
+
+    const supabase = createClient();
+
+    // SECURITY: Get coach profile to filter bookings
+    const { data: coachProfile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("auth_user_id", user.id)
+      .single();
+
+    if (!coachProfile) {
+      return NextResponse.json({ error: "Coach profile not found" }, { status: 404 });
+    }
+
+    // Get bookings only for this authenticated coach
     const { data: bookings, error } = await supabase
       .from("bookings")
       .select(`
@@ -22,9 +40,11 @@ export async function GET(req: NextRequest) {
         created_at,
         listings:listing_id (
           title,
-          duration_minutes
+          duration_minutes,
+          coach_id
         )
       `)
+      .eq('listings.coach_id', coachProfile.id)
       .order('created_at', { ascending: false });
 
     if (error) {
