@@ -3,9 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
-import AdminSidebar from '@/components/admin/AdminSidebar';
 
-export default function AdminLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
@@ -16,14 +15,14 @@ export default function AdminLayout({
   useEffect(() => {
     if (!loading && !user) {
       // Redirect to login if not authenticated
-      router.push('/auth/login?next=/admin');
+      router.push('/auth/login?next=' + window.location.pathname);
     }
   }, [user, loading, router]);
 
   // Show loading state while checking auth
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
@@ -32,19 +31,10 @@ export default function AdminLayout({
     );
   }
 
-  // Don't render admin content if not authenticated
+  // Don't render dashboard content if not authenticated
   if (!user) {
     return null;
   }
 
-  return (
-    <div className="flex h-screen bg-gray-50">
-      <AdminSidebar />
-      <main className="flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto">
-          {children}
-        </div>
-      </main>
-    </div>
-  );
+  return <>{children}</>;
 }
