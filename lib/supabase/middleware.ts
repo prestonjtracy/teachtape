@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
+  // Simple pass-through response
   const response = NextResponse.next({
     request,
   })
@@ -21,8 +22,8 @@ export async function updateSession(request: NextRequest) {
         // Basic JWT structure check (not full validation)
         const parts = accessToken.split('.')
         if (parts.length === 3) {
-          // Decode payload to check expiration
-          const payload = JSON.parse(atob(parts[1]))
+          // Decode payload to check expiration - use Buffer for base64 decode in Edge Runtime
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString())
           const now = Math.floor(Date.now() / 1000)
 
           // Check if token is not expired
@@ -33,7 +34,7 @@ export async function updateSession(request: NextRequest) {
       }
     } catch (error) {
       // Invalid token format, treat as unauthenticated
-      console.error('❌ [Middleware] Invalid auth token:', error)
+      // Silently fail in production
     }
   }
 
