@@ -82,8 +82,8 @@ export async function getCoachById(id: string): Promise<CoachResult<CoachWithLis
       .eq("is_public", true)
       .single();
 
-    if (!coachError && coachData) {
-      // New structure found
+    if (!coachError && coachData && coachData.services.length > 0) {
+      // New structure found with services
       const profileDataLog = (coachData.profile as any)?.[0];
       console.log(`✅ [getCoachById] Found coach in new structure:`, {
         id: coachData.id,
