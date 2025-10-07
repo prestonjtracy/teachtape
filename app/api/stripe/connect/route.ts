@@ -31,12 +31,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    // Retrieve the application base URL used for redirects.
+    // Priority: APP_URL env var > VERCEL_URL > default to production domain
+    const appUrl =
+      process.env.APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+      'https://teachtapesports.com';
+
+    console.log('🌐 [Stripe Connect] Using APP_URL:', appUrl);
+
     let baseUrl: URL;
     try {
       baseUrl = new URL(appUrl);
-    } catch {
-      return new Response(JSON.stringify({ error: "Invalid APP_URL" }), {
+    } catch (error) {
+      console.error('❌ [Stripe Connect] Invalid APP_URL:', appUrl, error);
+      return new Response(JSON.stringify({ error: "Invalid APP_URL configuration" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });

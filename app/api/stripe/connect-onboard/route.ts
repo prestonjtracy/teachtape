@@ -25,22 +25,22 @@ export async function POST() {
     );
   }
 
-  // Retrieve and verify the application base URL used for redirects.
-  const appUrl = process.env.APP_URL;
-  if (!appUrl) {
+  // Retrieve the application base URL used for redirects.
+  // Priority: APP_URL env var > VERCEL_URL > default to production domain
+  const appUrl =
+    process.env.APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    'https://teachtapesports.com';
 
-    return new Response(JSON.stringify({ error: "Missing APP_URL" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
+  console.log('Using APP_URL:', appUrl);
 
   // Ensure APP_URL is a valid absolute URL before using it.
   let baseUrl: URL;
   try {
     baseUrl = new URL(appUrl);
-  } catch {
-    return new Response(JSON.stringify({ error: "Invalid APP_URL" }), {
+  } catch (error) {
+    console.error('Invalid APP_URL:', appUrl, error);
+    return new Response(JSON.stringify({ error: "Invalid APP_URL configuration" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });
