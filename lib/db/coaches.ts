@@ -157,12 +157,19 @@ export async function getCoachById(id: string): Promise<CoachResult<CoachWithLis
     }
 
     // Fetch legacy listings
+    console.log(`🔍 [getCoachById] Fetching listings for coach_id: ${validId}`);
     const { data: listings, error: listingsError } = await supabase
       .from("listings")
-      .select("id, title, price_cents, duration_minutes, description")
+      .select("id, title, price_cents, duration_minutes, description, is_active")
       .eq("coach_id", validId)
       .eq("is_active", true)
       .order("created_at", { ascending: false });
+
+    console.log(`📊 [getCoachById] Listings query result:`, {
+      count: listings?.length || 0,
+      listings: listings,
+      error: listingsError
+    });
 
     if (listingsError) {
       console.error(`❌ [getCoachById] Listings fetch error:`, {
@@ -170,7 +177,7 @@ export async function getCoachById(id: string): Promise<CoachResult<CoachWithLis
         code: listingsError.code,
         details: listingsError.details
       });
-      
+
       return {
         success: false,
         error: `Error fetching coach listings: ${listingsError.message}`,
