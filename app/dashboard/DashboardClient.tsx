@@ -107,12 +107,33 @@ export default function DashboardClient() {
           });
         }
 
-        // Set Stripe status
-        setStripeStatus({
-          accountId: coach?.stripe_account_id || null,
-          chargesEnabled: !!coach?.stripe_account_id,
-          needsOnboarding: !coach?.stripe_account_id
-        });
+        // Fetch real Stripe account status from API
+        try {
+          const stripeStatusResponse = await fetch('/api/stripe/account-status');
+          if (stripeStatusResponse.ok) {
+            const stripeData = await stripeStatusResponse.json();
+            setStripeStatus({
+              accountId: stripeData.accountId,
+              chargesEnabled: stripeData.chargesEnabled,
+              needsOnboarding: stripeData.needsOnboarding
+            });
+          } else {
+            // Fallback to basic check if API fails
+            setStripeStatus({
+              accountId: coach?.stripe_account_id || null,
+              chargesEnabled: false,
+              needsOnboarding: true
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching Stripe status:', error);
+          // Fallback
+          setStripeStatus({
+            accountId: coach?.stripe_account_id || null,
+            chargesEnabled: false,
+            needsOnboarding: true
+          });
+        }
       } catch (error) {
         console.error('❌ [Dashboard] Error fetching coach data:', error);
       } finally {

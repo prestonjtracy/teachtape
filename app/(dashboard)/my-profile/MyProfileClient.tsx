@@ -244,6 +244,24 @@ export default function MyProfileClient({ initialUser, initialProfile }: MyProfi
             <h1 className="text-3xl font-bold text-[#123C7A] mb-2">My Profile</h1>
             <p className="text-lg text-neutral-text-secondary">Manage your personal information and settings</p>
           </div>
+
+          {/* Navigation Tabs (Only for coaches) */}
+          {formData.role === 'coach' && (
+            <div className="flex justify-center gap-4 mt-6">
+              <a
+                href="/my-profile"
+                className="px-6 py-2 text-sm font-medium border-b-2 border-[#FF5A1F] text-[#FF5A1F]"
+              >
+                Profile Info
+              </a>
+              <a
+                href="/my-profile/payments"
+                className="px-6 py-2 text-sm font-medium border-b-2 border-transparent text-gray-600 hover:text-[#FF5A1F] hover:border-gray-300 transition-colors"
+              >
+                Payment Settings
+              </a>
+            </div>
+          )}
         </div>
       </div>
 
