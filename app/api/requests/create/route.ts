@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClientForApiRoute } from "@/lib/supabase/server";
+import { createClientForApiRoute, createAdminClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import { z } from "zod";
 import { sendBookingRequestEmailsAsync } from "@/lib/email";
@@ -295,11 +295,12 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (coachProfile && athleteProfile) {
-        // Get coach email from auth
-        const { data: coachAuth } = await supabase.auth.admin.getUserById(coachProfile.auth_user_id);
+        // Get coach email from auth - need admin client for auth.admin API
+        const adminClient = createAdminClient();
+        const { data: coachAuth } = await adminClient.auth.admin.getUserById(coachProfile.auth_user_id);
         const coachEmail = coachAuth.user?.email;
 
-        const { data: athleteAuth } = await supabase.auth.admin.getUserById(athleteProfile.auth_user_id);
+        const { data: athleteAuth } = await adminClient.auth.admin.getUserById(athleteProfile.auth_user_id);
         const athleteEmail = athleteAuth.user?.email;
 
         if (coachEmail && athleteEmail) {

@@ -63,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .select(`
         *,
         listing:listings!inner(*),
-        athlete:profiles!booking_requests_athlete_id_fkey(id, full_name, email),
+        athlete:profiles!booking_requests_athlete_id_fkey(id, full_name, email, auth_user_id),
         coach:profiles!booking_requests_coach_id_fkey(id, full_name)
       `)
       .eq('id', requestId)
@@ -433,7 +433,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         conversation_id: bookingRequest.conversation_id,
         sender_id: null, // System message
         body: systemMessage,
-        kind: 'booking_accepted'
+        kind: 'booking_accepted',
+        metadata: messageData
       });
 
     if (messageError) {
@@ -450,7 +451,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Send email notification to athlete (fire-and-forget)
     try {
-      const { data: athleteAuth } = await supabase.auth.admin.getUserById(bookingRequest.athlete.id);
+      // Use admin client for auth.admin API access
+      const { data: athleteAuth } = await adminClient.auth.admin.getUserById(bookingRequest.athlete.auth_user_id);
       const athleteEmail = athleteAuth.user?.email;
 
       if (athleteEmail) {
