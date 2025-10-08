@@ -10,7 +10,9 @@ import {
   generateRequestDeclinedAthleteEmail
 } from "./emailTemplates";
 
-const from = "TeachTape <no-reply@teachtape.local>";
+// Use Resend's verified sender address (works immediately)
+// To use your own domain, verify teachtapesports.com in Resend dashboard first
+const from = "TeachTape <onboarding@resend.dev>";
 
 export async function sendEmailSMTP(to: string, subject: string, html: string) {
   const host = process.env.SMTP_HOST;
