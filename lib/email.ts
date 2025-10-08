@@ -32,39 +32,71 @@ export interface SendEmailOptions {
 }
 
 export async function sendEmailResend(options: SendEmailOptions | string, subject?: string, html?: string) {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) throw new Error("RESEND_API_KEY missing");
-  
-  const resend = new Resend(key);
-  
-  // Handle legacy string parameters for backward compatibility
-  if (typeof options === 'string') {
-    await resend.emails.send({ 
-      from, 
-      to: options, 
-      subject: subject!, 
-      html: html! 
+  try {
+    const key = process.env.RESEND_API_KEY;
+    console.log('📧 [sendEmailResend] RESEND_API_KEY:', key ? 'FOUND' : 'MISSING');
+
+    if (!key) {
+      console.error('❌ [sendEmailResend] RESEND_API_KEY is missing from environment variables');
+      throw new Error("RESEND_API_KEY missing");
+    }
+
+    const resend = new Resend(key);
+
+    // Handle legacy string parameters for backward compatibility
+    if (typeof options === 'string') {
+      console.log('📧 [sendEmailResend] Sending email (legacy mode):', {
+        from,
+        to: options,
+        subject: subject
+      });
+
+      const result = await resend.emails.send({
+        from,
+        to: options,
+        subject: subject!,
+        html: html!
+      });
+
+      console.log('✅ [sendEmailResend] Email sent successfully (legacy mode):', result);
+      return;
+    }
+
+    // New options-based API
+    const emailData: any = {
+      from,
+      to: options.to,
+      subject: options.subject,
+      html: options.html
+    };
+
+    if (options.text) {
+      emailData.text = options.text;
+    }
+
+    if (options.bcc) {
+      emailData.bcc = options.bcc;
+    }
+
+    console.log('📧 [sendEmailResend] Attempting to send email:', {
+      from: emailData.from,
+      to: emailData.to,
+      subject: emailData.subject,
+      hasBcc: !!emailData.bcc
     });
-    return;
+
+    const result = await resend.emails.send(emailData);
+
+    console.log('✅ [sendEmailResend] Email sent successfully:', result);
+
+  } catch (error) {
+    console.error('❌ [sendEmailResend] Failed to send email:', {
+      error: error instanceof Error ? error.message : error,
+      errorObject: error,
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    throw error;
   }
-  
-  // New options-based API
-  const emailData: any = {
-    from,
-    to: options.to,
-    subject: options.subject,
-    html: options.html
-  };
-  
-  if (options.text) {
-    emailData.text = options.text;
-  }
-  
-  if (options.bcc) {
-    emailData.bcc = options.bcc;
-  }
-  
-  await resend.emails.send(emailData);
 }
 
 /**
