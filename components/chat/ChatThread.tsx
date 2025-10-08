@@ -172,27 +172,27 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
     }
 
     return (
-      <div className="rounded-xl border bg-green-50 p-5 shadow-sm ring-1 ring-green-100">
+      <div className="rounded-xl border border-[#FF5A1F]/20 bg-gradient-to-br from-white to-orange-50/30 p-5 shadow-md ring-1 ring-[#FF5A1F]/10">
         <div className="flex items-start gap-3">
           {/* Check Circle Icon */}
-          <svg className="h-6 w-6 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="h-6 w-6 text-[#FF5A1F] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-green-800">
+            <h3 className="text-lg font-semibold text-[#123C7A]">
               Booking accepted! Payment processed successfully.
             </h3>
 
-            <div className="mt-3 flex items-center gap-2 text-sm text-green-900">
+            <div className="mt-3 flex items-center gap-2 text-sm text-[#123C7A]">
               {/* Calendar Icon */}
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-4 w-4 text-[#FF5A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               <span className="font-medium">Zoom Meeting Ready</span>
             </div>
 
-            <p className="mt-1 text-sm text-green-900">
+            <p className="mt-1 text-sm text-[#123C7A]/80">
               {formatDateTime(metadata.starts_at, metadata.timezone)} – {formatDateTime(metadata.ends_at, metadata.timezone, { timeOnly: true })}
             </p>
 
@@ -203,7 +203,7 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
                     await logZoomClick(metadata.booking_id, 'join_meeting');
                     window.open(metadata.athlete_join_url, '_blank');
                   }}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#FF5A1F] px-4 py-2.5 text-white hover:bg-[#FF5A1F]/90 transition-all shadow-sm hover:shadow-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF5A1F]"
                 >
                   {/* Video Icon */}
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -218,7 +218,7 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
                     await logZoomClick(metadata.booking_id, 'start_meeting');
                     window.open(metadata.coach_start_url, '_blank');
                   }}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-4 py-2 text-blue-600 ring-1 ring-blue-600 hover:bg-blue-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-[#FF5A1F] ring-2 ring-[#FF5A1F] hover:bg-orange-50 transition-all shadow-sm hover:shadow-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FF5A1F]"
                 >
                   {/* Video Icon */}
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -448,15 +448,15 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
                   <div className="max-w-2xl w-full">
                     {/* Try to render the structured card if metadata exists, otherwise fall back to custom design */}
                     {message.metadata && renderBookingAcceptedCard(message) || (
-                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 shadow-sm">
+                      <div className="bg-gradient-to-br from-white to-orange-50/30 border border-[#FF5A1F]/20 rounded-xl p-6 shadow-md">
                         {/* Success Header */}
                         <div className="flex items-center gap-3 mb-4">
                           <div className="flex-shrink-0">
-                            <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="h-6 w-6 text-[#FF5A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                           </div>
-                          <h3 className="text-lg font-semibold text-blue-900">
+                          <h3 className="text-lg font-semibold text-[#123C7A]">
                             Booking accepted! Payment processed successfully.
                           </h3>
                         </div>
@@ -464,10 +464,10 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
                         {/* Zoom Meeting Section */}
                         <div className="mb-4">
                           <div className="flex items-center gap-2 mb-2">
-                            <svg className="h-5 w-5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="h-5 w-5 text-[#FF5A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
-                            <span className="text-blue-900 font-semibold">Zoom Meeting Ready</span>
+                            <span className="text-[#123C7A] font-semibold">Zoom Meeting Ready</span>
                           </div>
                           
                           {/* Extract date from message body */}
@@ -475,7 +475,7 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
                             const dateMatch = message.body.match(/📅\s*([^\\n]+)/);
                             const dateText = dateMatch ? dateMatch[1] : '';
                             return dateText && (
-                              <div className="flex items-center gap-2 mb-4 text-blue-800">
+                              <div className="flex items-center gap-2 mb-4 text-[#123C7A]/80">
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
@@ -489,7 +489,7 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
                         <div className="space-y-4">
                           {/* For Athlete Section */}
                           <div>
-                            <h4 className="text-blue-900 font-semibold mb-2">For Athlete:</h4>
+                            <h4 className="text-[#123C7A] font-semibold mb-2">For Athlete:</h4>
                             {(() => {
                               const athleteMatch = message.body.match(/\*\*For Athlete:\*\*\s*\[([^\]]+)\]\(([^)]+)\)/);
                               if (athleteMatch) {
@@ -497,7 +497,7 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
                                 return (
                                   <button
                                     onClick={() => window.open(url, '_blank')}
-                                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+                                    className="inline-flex items-center gap-2 bg-[#FF5A1F] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#FF5A1F]/90 transition-all shadow-sm hover:shadow-md"
                                   >
                                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -515,7 +515,7 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
 
                           {/* For Coach Section */}
                           <div>
-                            <h4 className="text-blue-900 font-semibold mb-2">For Coach: Start Meeting</h4>
+                            <h4 className="text-[#123C7A] font-semibold mb-2">For Coach: Start Meeting</h4>
                             {(() => {
                               const coachMatch = message.body.match(/\*\*For Coach:\*\*\s*\[([^\]]+)\]\(([^)]+)\)/);
                               if (coachMatch) {
@@ -523,7 +523,7 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
                                 return (
                                   <button
                                     onClick={() => window.open(url, '_blank')}
-                                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-sm"
+                                    className="inline-flex items-center gap-2 bg-[#FF5A1F] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#FF5A1F]/90 transition-all shadow-sm hover:shadow-md"
                                   >
                                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />

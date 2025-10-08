@@ -415,8 +415,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         minute: '2-digit',
         timeZone: bookingRequest.timezone,
       });
-      
-      systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate}\n\n**For Athlete:** [🎥 Join Meeting](${zoomJoinUrl})\n\n**For Coach:** [🎥 Start Meeting](${zoomStartUrl})`;
+
+      const sessionEndTime = new Date(bookingRequest.proposed_end).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: bookingRequest.timezone,
+      });
+
+      systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate} - ${sessionEndTime}\n\n**For Athlete:** [🎥 Join Meeting](${zoomJoinUrl})\n\n**For Coach:** [🎥 Start Meeting](${zoomStartUrl})`;
     }
 
     console.log('📝 [POST /api/requests/accept] System message content:', systemMessage);

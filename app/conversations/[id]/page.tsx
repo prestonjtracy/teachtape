@@ -62,20 +62,6 @@ export default function ConversationPage({ params }: ConversationPageProps) {
           </ul>
         </div>
 
-        {/* Placeholder Chat Interface */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-bold text-[#123C7A] mb-4">Conversation</h2>
-          <div className="bg-gray-50 rounded-lg p-8 text-center">
-            <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-3.582 8-8 8a8.959 8.959 0 01-4.906-1.476L3 21l1.476-5.094A8.959 8.959 0 013 12c0-4.418 3.582-8 8-8s8 3.582 8 8z" />
-            </svg>
-            <h3 className="text-lg font-semibold text-gray-600 mb-2">Chat Interface Coming Soon</h3>
-            <p className="text-gray-500 mb-4">
-              The conversation interface is being developed. For now, the coach will reach out to you directly.
-            </p>
-          </div>
-        </div>
-
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
           <Link 
