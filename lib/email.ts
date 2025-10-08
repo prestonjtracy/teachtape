@@ -10,9 +10,8 @@ import {
   generateRequestDeclinedAthleteEmail
 } from "./emailTemplates";
 
-// Use Resend's verified sender address (works immediately)
-// To use your own domain, verify teachtapesports.com in Resend dashboard first
-const from = "TeachTape <onboarding@resend.dev>";
+// Using verified domain teachtapesports.com
+const from = "TeachTape <no-reply@teachtapesports.com>";
 
 export async function sendEmailSMTP(to: string, subject: string, html: string) {
   const host = process.env.SMTP_HOST;
@@ -190,10 +189,12 @@ export async function sendBookingRequestEmails(data: BookingRequestEmailData, ty
 
 /**
  * Fire-and-forget email sending for booking requests
+ * Updated to work better in Vercel serverless environment
  */
 export function sendBookingRequestEmailsAsync(data: BookingRequestEmailData, type: 'new_request' | 'accepted' | 'declined'): void {
   // Send emails in the background without awaiting
-  setImmediate(async () => {
-    await sendBookingRequestEmails(data, type);
+  // Don't use setImmediate as it doesn't work well in serverless environments
+  sendBookingRequestEmails(data, type).catch((error) => {
+    console.error('❌ [sendBookingRequestEmailsAsync] Unhandled error:', error);
   });
 }

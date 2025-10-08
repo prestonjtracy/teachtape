@@ -451,9 +451,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Send email notification to athlete (fire-and-forget)
     try {
+      console.log('📧 [POST /api/requests/accept] Starting email notification process');
+
       // Use admin client for auth.admin API access
-      const { data: athleteAuth } = await adminClient.auth.admin.getUserById(bookingRequest.athlete.auth_user_id);
-      const athleteEmail = athleteAuth.user?.email;
+      const { data: athleteAuth, error: athleteAuthError } = await adminClient.auth.admin.getUserById(bookingRequest.athlete.auth_user_id);
+
+      if (athleteAuthError) {
+        console.error('❌ [POST /api/requests/accept] Failed to fetch athlete auth user:', athleteAuthError);
+      }
+
+      const athleteEmail = athleteAuth?.user?.email;
+      console.log('📧 [POST /api/requests/accept] Athlete email:', athleteEmail ? 'found' : 'NOT FOUND');
 
       if (athleteEmail) {
         const emailData = {
@@ -473,11 +481,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           chatUrl: `${process.env.APP_URL || 'https://teachtape.local'}/messages/${bookingRequest.conversation_id}`
         };
 
+        console.log('📧 [POST /api/requests/accept] Sending email to athlete:', athleteEmail);
         sendBookingRequestEmailsAsync(emailData, 'accepted');
-        console.log('📧 [POST /api/requests/accept] Email notification queued for athlete');
+        console.log('✅ [POST /api/requests/accept] Email notification queued for athlete');
+      } else {
+        console.error('❌ [POST /api/requests/accept] Athlete email not found');
       }
     } catch (emailError) {
-      console.warn('⚠️ [POST /api/requests/accept] Failed to send email notification:', emailError);
+      console.error('❌ [POST /api/requests/accept] Failed to send email notification:', emailError);
     }
 
     return NextResponse.json({

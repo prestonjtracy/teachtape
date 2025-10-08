@@ -282,11 +282,20 @@ export async function POST(req: NextRequest) {
 
     // Send email notification to coach (fire-and-forget)
     try {
+      console.log('📧 [POST /api/requests/create] Starting email notification process');
+
       const { data: coachProfile, error: coachProfileError } = await supabase
         .from('profiles')
         .select('full_name, auth_user_id')
         .eq('id', validatedData.coach_id)
         .single();
+
+      if (coachProfileError) {
+        console.error('❌ [POST /api/requests/create] Failed to fetch coach profile:', coachProfileError);
+      }
+      if (!coachProfile) {
+        console.error('❌ [POST /api/requests/create] Coach profile is null');
+      }
 
       const { data: athleteProfile, error: athleteProfileError } = await supabase
         .from('profiles')
@@ -294,14 +303,35 @@ export async function POST(req: NextRequest) {
         .eq('id', profile.id)
         .single();
 
+      if (athleteProfileError) {
+        console.error('❌ [POST /api/requests/create] Failed to fetch athlete profile:', athleteProfileError);
+      }
+      if (!athleteProfile) {
+        console.error('❌ [POST /api/requests/create] Athlete profile is null');
+      }
+
       if (coachProfile && athleteProfile) {
+        console.log('✅ [POST /api/requests/create] Profiles loaded, fetching auth emails');
+
         // Get coach email from auth - need admin client for auth.admin API
         const adminClient = createAdminClient();
-        const { data: coachAuth } = await adminClient.auth.admin.getUserById(coachProfile.auth_user_id);
-        const coachEmail = coachAuth.user?.email;
+        const { data: coachAuth, error: coachAuthError } = await adminClient.auth.admin.getUserById(coachProfile.auth_user_id);
 
-        const { data: athleteAuth } = await adminClient.auth.admin.getUserById(athleteProfile.auth_user_id);
-        const athleteEmail = athleteAuth.user?.email;
+        if (coachAuthError) {
+          console.error('❌ [POST /api/requests/create] Failed to fetch coach auth user:', coachAuthError);
+        }
+
+        const coachEmail = coachAuth?.user?.email;
+        console.log('📧 [POST /api/requests/create] Coach email:', coachEmail ? 'found' : 'NOT FOUND');
+
+        const { data: athleteAuth, error: athleteAuthError } = await adminClient.auth.admin.getUserById(athleteProfile.auth_user_id);
+
+        if (athleteAuthError) {
+          console.error('❌ [POST /api/requests/create] Failed to fetch athlete auth user:', athleteAuthError);
+        }
+
+        const athleteEmail = athleteAuth?.user?.email;
+        console.log('📧 [POST /api/requests/create] Athlete email:', athleteEmail ? 'found' : 'NOT FOUND');
 
         if (coachEmail && athleteEmail) {
           const emailData = {
@@ -321,12 +351,17 @@ export async function POST(req: NextRequest) {
             chatUrl: `${process.env.APP_URL || 'https://teachtape.local'}/messages/${conversationId}`
           };
 
+          console.log('📧 [POST /api/requests/create] Sending email to coach:', coachEmail);
           sendBookingRequestEmailsAsync(emailData, 'new_request');
-          console.log('📧 [POST /api/requests/create] Email notification queued for coach');
+          console.log('✅ [POST /api/requests/create] Email notification queued for coach');
+        } else {
+          console.error('❌ [POST /api/requests/create] Missing email addresses - coach:', !!coachEmail, 'athlete:', !!athleteEmail);
         }
+      } else {
+        console.error('❌ [POST /api/requests/create] Missing profiles - coach:', !!coachProfile, 'athlete:', !!athleteProfile);
       }
     } catch (emailError) {
-      console.warn('⚠️ [POST /api/requests/create] Failed to send email notification:', emailError);
+      console.error('❌ [POST /api/requests/create] Failed to send email notification:', emailError);
     }
 
     return NextResponse.json({
