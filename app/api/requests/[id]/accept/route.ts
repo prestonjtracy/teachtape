@@ -376,12 +376,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       .insert({
         listing_id: bookingRequest.listing_id,
         coach_id: bookingRequest.coach_id,
+        athlete_id: bookingRequest.athlete_id,
         customer_email: bookingRequest.athlete.email,
         amount_paid_cents: bookingRequest.listing.price_cents,
         status: 'paid', // Use 'paid' status as per original schema
         starts_at: bookingRequest.proposed_start,
         ends_at: bookingRequest.proposed_end,
         stripe_session_id: paymentIntent.id, // Use payment_intent_id as session_id for Connect payments
+        zoom_join_url: zoomJoinUrl,
+        zoom_start_url: zoomStartUrl,
       })
       .select('id')
       .single();
