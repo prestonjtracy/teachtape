@@ -79,6 +79,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       );
     }
 
+    // Check if request has already been declined
+    if (bookingRequest.status === 'declined') {
+      console.error('❌ [POST /api/requests/accept] Cannot accept declined request');
+      return NextResponse.json(
+        { error: "Cannot accept a declined booking request." },
+        { status: 400 }
+      );
+    }
+
+    // Check if request has already been accepted
+    if (bookingRequest.status === 'accepted') {
+      console.error('❌ [POST /api/requests/accept] Request already accepted');
+      return NextResponse.json(
+        { error: "This booking request has already been accepted." },
+        { status: 400 }
+      );
+    }
+
     // Verify payment method exists
     if (!bookingRequest.payment_method_id) {
       console.error('❌ [POST /api/requests/accept] No payment method saved');

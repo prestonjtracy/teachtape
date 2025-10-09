@@ -72,6 +72,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       );
     }
 
+    // Check if request has already been accepted (payment processed)
+    if (bookingRequest.status === 'accepted') {
+      console.error('❌ [POST /api/requests/decline] Cannot decline accepted request (payment already processed)');
+      return NextResponse.json(
+        { error: "Cannot decline an already accepted booking request. Payment has been processed." },
+        { status: 400 }
+      );
+    }
+
     console.log('✅ [POST /api/requests/decline] Declining request:', requestId);
 
     // Update booking request status to declined

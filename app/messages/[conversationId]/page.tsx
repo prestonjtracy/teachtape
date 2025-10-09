@@ -29,6 +29,7 @@ export default function MessagePage({ params }: MessagePageProps) {
     loading: true,
     error: null,
   });
+  const [processingRequest, setProcessingRequest] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -135,6 +136,62 @@ export default function MessagePage({ params }: MessagePageProps) {
 
     loadConversationData();
   }, [params.conversationId, router]);
+
+  async function handleAcceptRequest() {
+    if (!data.bookingRequest) return;
+
+    setProcessingRequest(true);
+    try {
+      const response = await fetch(`/api/requests/${data.bookingRequest.id}/accept`, {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to accept request');
+      }
+
+      console.log('Request accepted successfully:', result);
+
+      // Reload conversation data to update booking request status
+      window.location.reload();
+    } catch (error) {
+      console.error('Error accepting request:', error);
+      alert(`Failed to accept request: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setProcessingRequest(false);
+    }
+  }
+
+  async function handleDeclineRequest() {
+    if (!data.bookingRequest) return;
+
+    if (!confirm('Are you sure you want to decline this booking request?')) {
+      return;
+    }
+
+    setProcessingRequest(true);
+    try {
+      const response = await fetch(`/api/requests/${data.bookingRequest.id}/decline`, {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to decline request');
+      }
+
+      console.log('Request declined successfully:', result);
+
+      // Reload conversation data to update booking request status
+      window.location.reload();
+    } catch (error) {
+      console.error('Error declining request:', error);
+      alert(`Failed to decline request: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setProcessingRequest(false);
+    }
+  }
 
   if (data.loading) {
     return (
@@ -259,11 +316,33 @@ export default function MessagePage({ params }: MessagePageProps) {
               
               {data.bookingRequest.status === 'pending' && isCoach && (
                 <div className="flex space-x-2">
-                  <button className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
-                    Accept
+                  <button
+                    onClick={handleAcceptRequest}
+                    disabled={processingRequest}
+                    className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {processingRequest ? (
+                      <>
+                        <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
+                        Processing...
+                      </>
+                    ) : (
+                      'Accept'
+                    )}
                   </button>
-                  <button className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors">
-                    Decline
+                  <button
+                    onClick={handleDeclineRequest}
+                    disabled={processingRequest}
+                    className="px-3 py-1 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {processingRequest ? (
+                      <>
+                        <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
+                        Processing...
+                      </>
+                    ) : (
+                      'Decline'
+                    )}
                   </button>
                 </div>
               )}
