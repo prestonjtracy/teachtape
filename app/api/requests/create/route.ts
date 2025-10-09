@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClientForApiRoute, createAdminClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import { z } from "zod";
-import { sendBookingRequestEmailsAsync } from "@/lib/email";
+import { sendBookingRequestEmails } from "@/lib/email";
 
 export const dynamic = 'force-dynamic';
 
@@ -352,8 +352,8 @@ export async function POST(req: NextRequest) {
           };
 
           console.log('📧 [POST /api/requests/create] Sending email to coach:', coachEmail);
-          sendBookingRequestEmailsAsync(emailData, 'new_request');
-          console.log('✅ [POST /api/requests/create] Email notification queued for coach');
+          await sendBookingRequestEmails(emailData, 'new_request');
+          console.log('✅ [POST /api/requests/create] Email notification sent to coach');
         } else {
           console.error('❌ [POST /api/requests/create] Missing email addresses - coach:', !!coachEmail, 'athlete:', !!athleteEmail);
         }
