@@ -12,8 +12,10 @@ const AcceptRequestSchema = z.object({
 });
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  console.log('🔍 [POST /api/requests/[id]/accept] Request received:', params.id);
-  
+  const startTime = Date.now();
+  const requestId = params.id;
+  console.log(`🔍 [POST /api/requests/[id]/accept] ===== REQUEST START ===== ID: ${requestId}, Time: ${new Date().toISOString()}`);
+
   try {
     const secretKey = process.env.STRIPE_SECRET_KEY;
     if (!secretKey) {
@@ -58,6 +60,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // Get booking request with related data including coach info for Connect
+    // IMPORTANT: Do NOT filter by status here - we need to check status AFTER fetching
+    // to provide proper error messages for non-pending requests
     const { data: bookingRequest, error: requestError } = await supabase
       .from('booking_requests')
       .select(`
@@ -68,7 +72,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       `)
       .eq('id', requestId)
       .eq('coach_id', coachProfile.id)
-      .eq('status', 'pending')
       .single();
 
     if (requestError || !bookingRequest) {
@@ -78,6 +81,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         { status: 404 }
       );
     }
+
+    console.log('🔍 [POST /api/requests/accept] Found booking request with status:', bookingRequest.status);
 
     // Check if request has already been declined
     if (bookingRequest.status === 'declined') {
@@ -93,6 +98,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       console.error('❌ [POST /api/requests/accept] Request already accepted');
       return NextResponse.json(
         { error: "This booking request has already been accepted." },
+        { status: 400 }
+      );
+    }
+
+    // Check if request is not pending
+    if (bookingRequest.status !== 'pending') {
+      console.error('❌ [POST /api/requests/accept] Invalid status:', bookingRequest.status);
+      return NextResponse.json(
+        { error: `Cannot accept request with status: ${bookingRequest.status}` },
         { status: 400 }
       );
     }
@@ -395,15 +409,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       );
     }
 
-    // Update booking request status
-    const { error: updateError } = await adminClient
-      .from('booking_requests')
-      .update({ status: 'accepted' })
-      .eq('id', requestId);
+    // Update booking request status atomically with row-level locking
+    // This prevents race conditions where both accept and decline are called simultaneously
+    const { data: statusUpdateResult, error: statusUpdateError } = await adminClient
+      .rpc('update_booking_request_status_atomic', {
+        request_id: requestId,
+        expected_current_status: 'pending',
+        new_status: 'accepted'
+      });
 
-    if (updateError) {
-      console.error('❌ [POST /api/requests/accept] Failed to update request status:', updateError);
-      // Don't fail the whole request for this
+    if (statusUpdateError || !statusUpdateResult?.success) {
+      console.error('❌ [POST /api/requests/accept] Failed to update request status atomically:', {
+        error: statusUpdateError,
+        result: statusUpdateResult
+      });
+
+      // If there was a status mismatch, provide a helpful error
+      if (statusUpdateResult?.error === 'status_mismatch') {
+        return NextResponse.json(
+          { error: `Cannot accept request. Current status is ${statusUpdateResult.current_status}, expected pending.` },
+          { status: 400 }
+        );
+      }
+
+      // For other errors, continue but log the issue
+      console.warn('⚠️ [POST /api/requests/accept] Status update failed but continuing with flow');
+    } else {
+      console.log('✅ [POST /api/requests/accept] Status updated atomically from pending to accepted');
     }
 
     // Create structured system message for booking acceptance
@@ -509,6 +541,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       console.error('❌ [POST /api/requests/accept] Failed to send email notification:', emailError);
     }
 
+    const duration = Date.now() - startTime;
+    console.log(`✅ [POST /api/requests/[id]/accept] ===== REQUEST SUCCESS ===== ID: ${requestId}, Duration: ${duration}ms, Time: ${new Date().toISOString()}`);
+
     return NextResponse.json({
       success: true,
       booking_id: booking.id,
@@ -517,6 +552,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     });
 
   } catch (error) {
+    const duration = Date.now() - startTime;
+    console.log(`❌ [POST /api/requests/[id]/accept] ===== REQUEST ERROR ===== ID: ${requestId}, Duration: ${duration}ms, Time: ${new Date().toISOString()}`);
+
     if (error instanceof z.ZodError) {
       console.error('❌ [POST /api/requests/accept] Validation error:', error.errors);
       return NextResponse.json(
