@@ -70,7 +70,7 @@ export default function DashboardClient() {
           .single();
 
         // Fetch bookings
-        const { data: bookingsData } = await supabase
+        const { data: bookingsData, error: bookingsError } = await supabase
           .from('bookings')
           .select(`
             id,
@@ -80,12 +80,19 @@ export default function DashboardClient() {
             status,
             listing_id,
             stripe_session_id,
+            starts_at,
+            ends_at,
             listing:listings(title)
           `)
           .eq('coach_id', profile.id)
           .order('created_at', { ascending: false });
 
+        if (bookingsError) {
+          console.error('❌ [Dashboard] Failed to fetch bookings:', bookingsError);
+        }
+
         if (bookingsData) {
+          console.log('✅ [Dashboard] Fetched bookings:', bookingsData.length);
           setCoachBookings(bookingsData as unknown as Booking[]);
           
           // Calculate earnings
