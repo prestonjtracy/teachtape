@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClientForApiRoute, createAdminClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import { z } from "zod";
-import { sendBookingRequestEmailsAsync } from "@/lib/email";
+import { sendBookingRequestEmails } from "@/lib/email";
 import { createMeeting } from "@/lib/zoom/api";
 
 export const dynamic = 'force-dynamic';
@@ -502,7 +502,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       payment_intent_id: paymentIntent.id
     });
 
-    // Send email notification to athlete (fire-and-forget)
+    // Send email notification to athlete (must await to prevent serverless termination)
     try {
       console.log('📧 [POST /api/requests/accept] Starting email notification process');
 
@@ -535,8 +535,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         };
 
         console.log('📧 [POST /api/requests/accept] Sending email to athlete:', athleteEmail);
-        sendBookingRequestEmailsAsync(emailData, 'accepted');
-        console.log('✅ [POST /api/requests/accept] Email notification queued for athlete');
+        await sendBookingRequestEmails(emailData, 'accepted');
+        console.log('✅ [POST /api/requests/accept] Email notification sent to athlete');
       } else {
         console.error('❌ [POST /api/requests/accept] Athlete email not found');
       }
