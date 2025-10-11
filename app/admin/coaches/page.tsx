@@ -4,7 +4,8 @@ import CoachesTable from '@/components/admin/CoachesTable'
 export default async function CoachesPage() {
   const supabase = createClient()
 
-  // Get coaches with their profile data, services, and listings count
+  // Get coaches with their profile data and services count
+  // Note: listings table has FK to profiles, not coaches, so we can't join it here
   const { data: coaches, error } = await supabase
     .from('coaches')
     .select(`
@@ -24,9 +25,6 @@ export default async function CoachesPage() {
       ),
       services (
         id
-      ),
-      listings (
-        id
       )
     `)
     .order('created_at', { ascending: false })
@@ -35,14 +33,28 @@ export default async function CoachesPage() {
     console.error('Error fetching coaches:', error)
   }
 
-  // Transform data to include service count (combining both services and listings)
+  // Get listings count separately since it references profiles, not coaches
+  const profileIds = coaches?.map(c => c.profile_id) || []
+  const { data: listings } = await supabase
+    .from('listings')
+    .select('id, coach_id')
+    .in('coach_id', profileIds)
+
+  // Create a map of profile_id -> listings count
+  const listingsCountMap = new Map<string, number>()
+  listings?.forEach(listing => {
+    const count = listingsCountMap.get(listing.coach_id) || 0
+    listingsCountMap.set(listing.coach_id, count + 1)
+  })
+
+  // Transform data to include service count (combining services + listings)
   const transformedCoaches = coaches?.map(coach => {
     // Handle profile data - it could be an object or array depending on the join
     const profile = Array.isArray(coach.profiles) ? coach.profiles[0] : coach.profiles
 
     // Count both services and listings
     const servicesCount = coach.services?.length || 0
-    const listingsCount = coach.listings?.length || 0
+    const listingsCount = listingsCountMap.get(coach.profile_id) || 0
     const totalServices = servicesCount + listingsCount
 
     return {
