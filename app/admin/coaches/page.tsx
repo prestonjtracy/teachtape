@@ -4,7 +4,7 @@ import CoachesTable from '@/components/admin/CoachesTable'
 export default async function CoachesPage() {
   const supabase = createClient()
 
-  // Get coaches with their profile data and services count
+  // Get coaches with their profile data, services, and listings count
   const { data: coaches, error } = await supabase
     .from('coaches')
     .select(`
@@ -24,6 +24,9 @@ export default async function CoachesPage() {
       ),
       services (
         id
+      ),
+      listings (
+        id
       )
     `)
     .order('created_at', { ascending: false })
@@ -32,10 +35,15 @@ export default async function CoachesPage() {
     console.error('Error fetching coaches:', error)
   }
 
-  // Transform data to include service count
+  // Transform data to include service count (combining both services and listings)
   const transformedCoaches = coaches?.map(coach => {
     // Handle profile data - it could be an object or array depending on the join
     const profile = Array.isArray(coach.profiles) ? coach.profiles[0] : coach.profiles
+
+    // Count both services and listings
+    const servicesCount = coach.services?.length || 0
+    const listingsCount = coach.listings?.length || 0
+    const totalServices = servicesCount + listingsCount
 
     return {
       id: coach.id,
@@ -47,7 +55,7 @@ export default async function CoachesPage() {
       is_public: coach.is_public,
       stripe_connected: !!coach.stripe_account_id,
       stripe_account_id: coach.stripe_account_id,
-      services_count: coach.services?.length || 0,
+      services_count: totalServices,
       created_at: coach.created_at,
       verified: !!coach.verified_at,
       verified_at: coach.verified_at

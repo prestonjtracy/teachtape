@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     // Check if user is admin
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('id, role')
       .eq('auth_user_id', user.id)
       .single()
 
@@ -50,10 +50,10 @@ export async function POST(request: NextRequest) {
           .single()
         
         // Mark coach as verified
-        const verifyUpdate: any = { 
+        const verifyUpdate: any = {
           is_public: true,
           verified_at: new Date().toISOString(),
-          verified_by: user.id
+          verified_by: profile.id  // Use profile ID instead of auth user ID
         }
         
         const { error: verifyError } = await supabase
