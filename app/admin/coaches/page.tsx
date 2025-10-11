@@ -3,7 +3,7 @@ import CoachesTable from '@/components/admin/CoachesTable'
 
 export default async function CoachesPage() {
   const supabase = createClient()
-  
+
   // Get coaches with their profile data and services count
   const { data: coaches, error } = await supabase
     .from('coaches')
@@ -15,7 +15,7 @@ export default async function CoachesPage() {
       stripe_account_id,
       verified_at,
       created_at,
-      profile:profiles!coaches_profile_id_fkey (
+      profiles!profile_id (
         id,
         full_name,
         avatar_url,
@@ -28,26 +28,31 @@ export default async function CoachesPage() {
     `)
     .order('created_at', { ascending: false })
 
-  // Transform data to include service count
-  const transformedCoaches = coaches?.map(coach => ({
-    id: coach.id,
-    profile_id: coach.profile_id,
-    full_name: (coach.profile as any)?.[0]?.full_name || 'No name set',
-    sport: coach.sport,
-    bio: (coach.profile as any)?.[0]?.bio,
-    avatar_url: (coach.profile as any)?.[0]?.avatar_url,
-    is_public: coach.is_public,
-    stripe_connected: !!coach.stripe_account_id,
-    stripe_account_id: coach.stripe_account_id,
-    services_count: coach.services?.length || 0,
-    created_at: coach.created_at,
-    verified: !!coach.verified_at, // Use verified_at field if available, fallback to is_public
-    verified_at: coach.verified_at
-  })) || []
-
   if (error) {
     console.error('Error fetching coaches:', error)
   }
+
+  // Transform data to include service count
+  const transformedCoaches = coaches?.map(coach => {
+    // Handle profile data - it could be an object or array depending on the join
+    const profile = Array.isArray(coach.profiles) ? coach.profiles[0] : coach.profiles
+
+    return {
+      id: coach.id,
+      profile_id: coach.profile_id,
+      full_name: (profile as any)?.full_name || 'No name set',
+      sport: coach.sport,
+      bio: (profile as any)?.bio,
+      avatar_url: (profile as any)?.avatar_url,
+      is_public: coach.is_public,
+      stripe_connected: !!coach.stripe_account_id,
+      stripe_account_id: coach.stripe_account_id,
+      services_count: coach.services?.length || 0,
+      created_at: coach.created_at,
+      verified: !!coach.verified_at,
+      verified_at: coach.verified_at
+    }
+  }) || []
 
   return (
     <div className="p-6">
