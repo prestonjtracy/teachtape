@@ -41,9 +41,9 @@ export default async function PaymentsPage() {
     `)
     .order('created_at', { ascending: false })
 
-  // Fallback to bookings table if payments table doesn't exist
+  // Fallback to bookings table if payments table doesn't exist or is empty
   let fallbackPayments = null
-  if (paymentsError && paymentsError.code === 'PGRST116') {
+  if ((paymentsError && paymentsError.code === 'PGRST116') || (!paymentsError && (!payments || payments.length === 0))) {
     const { data: bookingsData, error: bookingsError } = await supabase
       .from('bookings')
       .select(`
@@ -66,6 +66,7 @@ export default async function PaymentsPage() {
           title
         )
       `)
+      .eq('status', 'paid')
       .order('created_at', { ascending: false })
 
     if (!bookingsError) {

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 
 interface ZoomLog {
   id: string;
@@ -10,19 +9,25 @@ interface ZoomLog {
   user_agent: string | null;
   ip_address: string | null;
   created_at: string;
-  coach: {
+  coach_id: string;
+  athlete_id: string;
+  coach: Array<{
     id: string;
     full_name: string;
-  };
-  athlete: {
+    avatar_url: string | null;
+  }> | null;
+  athlete: Array<{
     id: string;
     full_name: string;
-  };
-  booking: {
+    avatar_url: string | null;
+  }> | null;
+  booking: Array<{
     id: string;
-    listing_title: string;
-    session_date: string;
-  };
+    listing: Array<{
+      id: string;
+      title: string;
+    }> | null;
+  }> | null;
 }
 
 export default function ZoomLogsTable() {
@@ -32,8 +37,6 @@ export default function ZoomLogsTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const logsPerPage = 50;
-
-  const supabase = createClient();
 
   useEffect(() => {
     fetchLogs();
@@ -57,26 +60,9 @@ export default function ZoomLogsTable() {
       }
 
       const { logs, count } = await response.json();
-      
-      // For now, just display basic log data - we can enhance with related data later
-      const transformedData = logs.map((log: any) => ({
-        ...log,
-        coach: {
-          id: log.coach_id,
-          full_name: 'Coach User', // Placeholder - we'll add proper lookup later
-        },
-        athlete: {
-          id: log.athlete_id,
-          full_name: 'Athlete User', // Placeholder - we'll add proper lookup later
-        },
-        booking: {
-          id: log.booking_id,
-          listing_title: 'Booking Session', // Placeholder - we'll add proper lookup later
-          session_date: log.created_at,
-        }
-      }));
 
-      setLogs(transformedData);
+      // Use the data from API which now includes related user and booking data
+      setLogs(logs);
       setTotalCount(count);
       setError(null);
     } catch (err) {
@@ -205,29 +191,27 @@ export default function ZoomLogsTable() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
-                    {log.coach?.full_name || 'Unknown'}
+                    {log.coach?.[0]?.full_name || 'Unknown'}
                   </div>
                   <div className="text-sm text-gray-500 font-mono text-xs">
-                    {log.coach?.id?.substring(0, 8)}...
+                    {log.coach?.[0]?.id?.substring(0, 8)}...
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
-                    {log.athlete?.full_name || 'Unknown'}
+                    {log.athlete?.[0]?.full_name || 'Unknown'}
                   </div>
                   <div className="text-sm text-gray-500 font-mono text-xs">
-                    {log.athlete?.id?.substring(0, 8)}...
+                    {log.athlete?.[0]?.id?.substring(0, 8)}...
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">
-                    {log.booking?.listing_title || 'Unknown Session'}
+                    {log.booking?.[0]?.listing?.[0]?.title || 'Unknown Session'}
                   </div>
-                  {log.booking?.session_date && (
-                    <div className="text-sm text-gray-500">
-                      {formatDateTime(log.booking.session_date)}
-                    </div>
-                  )}
+                  <div className="text-sm text-gray-500">
+                    Booking ID: {log.booking_id.substring(0, 8)}...
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">

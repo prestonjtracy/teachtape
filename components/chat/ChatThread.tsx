@@ -145,16 +145,48 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
     });
   };
 
-  // Function to log zoom button clicks
-  const logZoomClick = async (bookingId: string, actionType: 'start_meeting' | 'join_meeting') => {
+  // Function to find booking ID by conversation ID
+  const findBookingIdByConversation = async (): Promise<string | null> => {
     try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        console.error('Failed to find booking ID:', error);
+        return null;
+      }
+
+      return data.id;
+    } catch (error) {
+      console.error('Error finding booking ID:', error);
+      return null;
+    }
+  };
+
+  // Function to log zoom button clicks
+  const logZoomClick = async (bookingId: string | null, actionType: 'start_meeting' | 'join_meeting') => {
+    try {
+      // If no booking ID provided, try to find it from the conversation
+      const finalBookingId = bookingId || await findBookingIdByConversation();
+
+      if (!finalBookingId) {
+        console.log('No booking ID available for zoom log');
+        return;
+      }
+
       await fetch('/api/zoom-logs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          booking_id: bookingId,
+          booking_id: finalBookingId,
           action_type: actionType,
         }),
       });
@@ -292,19 +324,18 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
           <button
             onClick={async (e) => {
               e.preventDefault();
-              
+
               // Try to log the click if we have message context
               if (message && url.includes('zoom')) {
                 const actionType = isStartButton ? 'start_meeting' : 'join_meeting';
                 try {
-                  // For legacy messages, we can't get booking_id easily
-                  // We'll skip logging for now to avoid errors
-                  console.log('Legacy zoom button clicked:', actionType);
+                  // Log the zoom click (will look up booking_id from conversation)
+                  await logZoomClick(null, actionType);
                 } catch (error) {
-                  console.error('Failed to log legacy zoom click:', error);
+                  console.error('Failed to log zoom click:', error);
                 }
               }
-              
+
               // Open the zoom URL
               window.open(url, '_blank');
             }}
@@ -493,10 +524,13 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
                             {(() => {
                               const athleteMatch = message.body.match(/\*\*For Athlete:\*\*\s*\[([^\]]+)\]\(([^)]+)\)/);
                               if (athleteMatch) {
-                                const [, buttonText, url] = athleteMatch;
+                                const [, , url] = athleteMatch;
                                 return (
                                   <button
-                                    onClick={() => window.open(url, '_blank')}
+                                    onClick={async () => {
+                                      await logZoomClick(null, 'join_meeting');
+                                      window.open(url, '_blank');
+                                    }}
                                     className="inline-flex items-center gap-2 bg-[#FF5A1F] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#FF5A1F]/90 transition-all shadow-sm hover:shadow-md"
                                   >
                                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -519,10 +553,13 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
                             {(() => {
                               const coachMatch = message.body.match(/\*\*For Coach:\*\*\s*\[([^\]]+)\]\(([^)]+)\)/);
                               if (coachMatch) {
-                                const [, buttonText, url] = coachMatch;
+                                const [, , url] = coachMatch;
                                 return (
                                   <button
-                                    onClick={() => window.open(url, '_blank')}
+                                    onClick={async () => {
+                                      await logZoomClick(null, 'start_meeting');
+                                      window.open(url, '_blank');
+                                    }}
                                     className="inline-flex items-center gap-2 bg-[#FF5A1F] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#FF5A1F]/90 transition-all shadow-sm hover:shadow-md"
                                   >
                                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
 
     console.log('✅ [GET /api/zoom-logs] Admin access verified');
 
-    // Fetch zoom logs using admin client to bypass RLS
+    // Fetch zoom logs using admin client to bypass RLS, with user and booking data
     const { data: logs, error: logsError } = await adminSupabase
       .from('zoom_session_logs')
       .select(`
@@ -54,7 +54,24 @@ export async function GET(request: NextRequest) {
         ip_address,
         created_at,
         coach_id,
-        athlete_id
+        athlete_id,
+        coach:profiles!zoom_session_logs_coach_id_fkey (
+          id,
+          full_name,
+          avatar_url
+        ),
+        athlete:profiles!zoom_session_logs_athlete_id_fkey (
+          id,
+          full_name,
+          avatar_url
+        ),
+        booking:bookings!zoom_session_logs_booking_id_fkey (
+          id,
+          listing:listings!bookings_listing_id_fkey (
+            id,
+            title
+          )
+        )
       `)
       .order('created_at', { ascending: false })
       .limit(100);
