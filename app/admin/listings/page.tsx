@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import ListingsTable from '@/components/admin/ListingsTable'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ListingsPage() {
   const supabase = createClient()
   
