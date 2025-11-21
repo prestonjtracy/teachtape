@@ -16,6 +16,8 @@ export interface ZoomWebhookPayload {
       end_time?: string;
       participant?: {
         user_name?: string;
+        user_id?: string;
+        email?: string;
         join_time?: string;
         leave_time?: string;
       };
