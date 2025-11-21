@@ -83,46 +83,46 @@ export async function middleware(request: NextRequest) {
     // Skip rate limiting for webhooks (they have their own auth)
     const isWebhook = path.includes('/webhook')
 
-    if (!isWebhook) {
-      const identifier = getClientIdentifier(request.headers)
-
-      // Use stricter limits for auth endpoints
-      const isAuthEndpoint = path.startsWith('/api/auth/')
-      const config = isAuthEndpoint ? RateLimitPresets.STRICT : RateLimitPresets.MODERATE
-
-      const rateLimitResult = rateLimit(identifier, config)
-
-      if (!rateLimitResult.success) {
-        return new NextResponse(
-          JSON.stringify({
-            error: 'Too many requests',
-            message: 'Rate limit exceeded. Please try again later.',
-            retryAfter: Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
-          }),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json',
-              'Retry-After': String(Math.ceil((rateLimitResult.reset - Date.now()) / 1000)),
-              'X-RateLimit-Limit': String(rateLimitResult.limit),
-              'X-RateLimit-Remaining': String(rateLimitResult.remaining),
-              'X-RateLimit-Reset': String(rateLimitResult.reset)
-            }
-          }
-        )
-      }
-
-      // Add rate limit headers to successful responses
-      const response = NextResponse.next()
-      response.headers.set('X-RateLimit-Limit', String(rateLimitResult.limit))
-      response.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining))
-      response.headers.set('X-RateLimit-Reset', String(rateLimitResult.reset))
-
-      // Continue to auth check if needed
-      if (!path.startsWith('/api/')) {
-        return response
-      }
+    if (isWebhook) {
+      // Webhooks handle their own rate limiting, let them through
+      return NextResponse.next()
     }
+
+    // Apply rate limiting to non-webhook API routes
+    const identifier = getClientIdentifier(request.headers)
+
+    // Use stricter limits for auth endpoints
+    const isAuthEndpoint = path.startsWith('/api/auth/')
+    const config = isAuthEndpoint ? RateLimitPresets.STRICT : RateLimitPresets.MODERATE
+
+    const rateLimitResult = rateLimit(identifier, config)
+
+    if (!rateLimitResult.success) {
+      return new NextResponse(
+        JSON.stringify({
+          error: 'Too many requests',
+          message: 'Rate limit exceeded. Please try again later.',
+          retryAfter: Math.ceil((rateLimitResult.reset - Date.now()) / 1000)
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(Math.ceil((rateLimitResult.reset - Date.now()) / 1000)),
+            'X-RateLimit-Limit': String(rateLimitResult.limit),
+            'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+            'X-RateLimit-Reset': String(rateLimitResult.reset)
+          }
+        }
+      )
+    }
+
+    // Add rate limit headers to successful responses for API routes
+    const response = NextResponse.next()
+    response.headers.set('X-RateLimit-Limit', String(rateLimitResult.limit))
+    response.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining))
+    response.headers.set('X-RateLimit-Reset', String(rateLimitResult.reset))
+    return response
   }
 
   // Protected routes that require authentication
