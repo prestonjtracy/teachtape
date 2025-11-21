@@ -1,11 +1,42 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import PaymentsTable from '@/components/admin/PaymentsTable'
+import { redirect } from 'next/navigation'
 
 export default async function PaymentsPage() {
-  const supabase = createClient()
-  
+  try {
+    const supabase = createClient()
+
+    // Check authentication and admin role
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    console.log('[Payments Page] Auth check:', { user: user?.email, authError })
+
+    if (authError || !user) {
+      console.log('[Payments Page] No user, redirecting to login')
+      redirect('/login')
+    }
+
+    // Verify admin role
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('auth_user_id', user.id)
+      .single()
+
+    console.log('[Payments Page] Profile check:', { role: profile?.role, profileError })
+
+    if (profileError || profile?.role !== 'admin') {
+      console.log('[Payments Page] Not admin, redirecting to home')
+      redirect('/')
+    }
+
+    console.log('[Payments Page] ✅ Admin verified, starting data fetch for:', user.email)
+
+  // Use admin client for data queries (bypasses RLS after verifying admin access)
+  const adminSupabase = createAdminClient()
+
   // Try to get payments from dedicated payments table first
-  const { data: payments, error: paymentsError } = await supabase
+  const { data: payments, error: paymentsError } = await adminSupabase
     .from('payments')
     .select(`
       id,
@@ -41,56 +72,93 @@ export default async function PaymentsPage() {
     `)
     .order('created_at', { ascending: false })
 
+  console.log('[Payments Page] Payments table query result:', {
+    error: paymentsError,
+    count: payments?.length || 0
+  })
+
   // Fallback to bookings table if payments table doesn't exist or is empty
+  // PGRST116 = table not found in schema cache (old error code)
+  // PGRST205 = table not found (new error code)
   let fallbackPayments = null
-  if ((paymentsError && paymentsError.code === 'PGRST116') || (!paymentsError && (!payments || payments.length === 0))) {
-    const { data: bookingsData, error: bookingsError } = await supabase
+  if ((paymentsError && (paymentsError.code === 'PGRST116' || paymentsError.code === 'PGRST205')) || (!paymentsError && (!payments || payments.length === 0))) {
+    console.log('[Payments Page] Fetching from bookings table as fallback...')
+
+    const { data: bookingsData, error: bookingsError } = await adminSupabase
       .from('bookings')
       .select(`
         id,
         stripe_session_id,
+        stripe_payment_intent,
         amount_paid_cents,
         customer_email,
+        athlete_email,
+        athlete_name,
         status,
         created_at,
-        coach:profiles!bookings_coach_id_fkey (
+        athlete_id,
+        coach_id,
+        listing_id,
+        coach:coach_id(
           id,
           full_name,
-          avatar_url,
-          stripe_account_id:coaches!coaches_profile_id_fkey (
-            stripe_account_id
-          )
+          avatar_url
         ),
-        listing:listings!bookings_listing_id_fkey (
+        athlete:athlete_id(
+          id,
+          full_name,
+          avatar_url
+        ),
+        listing:listing_id(
           id,
           title
         )
       `)
-      .eq('status', 'paid')
+      .gt('amount_paid_cents', 0)
       .order('created_at', { ascending: false })
 
-    if (!bookingsError) {
-      fallbackPayments = bookingsData?.map(booking => ({
-        id: booking.id,
-        payment_id: booking.stripe_session_id || booking.id,
-        athlete_name: 'Customer',
-        athlete_email: booking.customer_email,
-        athlete_avatar: null,
-        coach_name: (booking.coach as any)?.[0]?.full_name || 'Unknown Coach',
-        coach_avatar: (booking.coach as any)?.[0]?.avatar_url,
-        coach_stripe_account: (booking.coach as any)?.[0]?.stripe_account_id?.[0]?.stripe_account_id,
-        amount: booking.amount_paid_cents,
-        platform_fee: Math.floor(booking.amount_paid_cents * 0.1), // 10% platform fee
-        coach_amount: booking.amount_paid_cents - Math.floor(booking.amount_paid_cents * 0.1),
-        payment_status: booking.status === 'paid' ? 'succeeded' : booking.status,
-        payout_status: 'unknown' as const,
-        date: booking.created_at,
-        listing_title: (booking.listing as any)?.[0]?.title,
-        source: 'bookings' as const,
-        payout_failed_reason: null,
-        payout_retry_count: 0,
-        stripe_transfer_id: null
-      })) || []
+    console.log('[Payments Page] Bookings query result:', {
+      error: bookingsError,
+      count: bookingsData?.length || 0,
+      sample: bookingsData?.[0] || null
+    })
+
+    if (!bookingsError && bookingsData) {
+      fallbackPayments = bookingsData.map((booking: any) => {
+        // Get coach stripe account separately since it requires a join to coaches table
+        const coachData = booking.coach || {}
+        const athleteData = booking.athlete || {}
+        const listingData = booking.listing || {}
+
+        return {
+          id: booking.id,
+          payment_id: booking.stripe_payment_intent || booking.stripe_session_id || booking.id,
+          athlete_name: athleteData.full_name || booking.athlete_name || booking.customer_email || 'Customer',
+          athlete_email: booking.athlete_email || booking.customer_email,
+          athlete_avatar: athleteData.avatar_url || null,
+          coach_name: coachData.full_name || 'Unknown Coach',
+          coach_avatar: coachData.avatar_url || null,
+          coach_stripe_account: null, // Would need additional join to coaches table
+          amount: booking.amount_paid_cents || 0,
+          platform_fee: Math.floor((booking.amount_paid_cents || 0) * 0.1), // 10% platform fee
+          coach_amount: (booking.amount_paid_cents || 0) - Math.floor((booking.amount_paid_cents || 0) * 0.1),
+          payment_status: booking.status === 'paid' ? 'succeeded' : booking.status,
+          payout_status: 'unknown' as const,
+          date: booking.created_at,
+          listing_title: listingData.title || 'Session',
+          source: 'bookings' as const,
+          payout_failed_reason: null,
+          payout_retry_count: 0,
+          stripe_transfer_id: null
+        }
+      })
+
+      console.log('[Payments Page] Transformed fallback payments:', {
+        count: fallbackPayments.length,
+        sample: fallbackPayments[0]
+      })
+    } else if (bookingsError) {
+      console.error('[Payments Page] Error fetching bookings:', bookingsError)
     }
   }
 
@@ -118,6 +186,13 @@ export default async function PaymentsPage() {
   })) || []
 
   const allPayments = transformedPayments.length > 0 ? transformedPayments : fallbackPayments || []
+
+  console.log('[Payments Page] Final payment data:', {
+    total: allPayments.length,
+    fromPaymentsTable: transformedPayments.length,
+    fromBookingsTable: fallbackPayments?.length || 0,
+    samplePayment: allPayments[0]
+  })
 
   // Calculate summary stats
   const stats = {
@@ -181,4 +256,8 @@ export default async function PaymentsPage() {
       </div>
     </div>
   )
+  } catch (error) {
+    console.error('[Payments Page] ❌ Fatal error:', error)
+    throw error
+  }
 }

@@ -1,33 +1,75 @@
-export default function AdminDashboard() {
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+
+export default async function AdminDashboard() {
+  const supabase = createClient()
+
+  // Check authentication and admin role
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  // Verify admin role
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('auth_user_id', user.id)
+    .single()
+
+  if (profile?.role !== 'admin') {
+    redirect('/')
+  }
+
+  // Use admin client to fetch stats
+  const adminSupabase = createAdminClient()
+
+  // Fetch stats in parallel
+  const [
+    { count: totalUsers },
+    { count: activeCoaches },
+    { count: totalBookings },
+    { data: bookingsForRevenue }
+  ] = await Promise.all([
+    adminSupabase.from('profiles').select('*', { count: 'exact', head: true }),
+    adminSupabase.from('coaches').select('*', { count: 'exact', head: true }),
+    adminSupabase.from('bookings').select('*', { count: 'exact', head: true }),
+    adminSupabase.from('bookings').select('amount_paid_cents').gt('amount_paid_cents', 0)
+  ])
+
+  // Calculate total revenue
+  const totalRevenue = bookingsForRevenue?.reduce((sum, booking) => sum + (booking.amount_paid_cents || 0), 0) || 0
+
   return (
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
         <p className="text-gray-600 mt-2">Welcome to the TeachTape admin panel</p>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Total Users</h3>
-          <p className="text-3xl font-bold text-blue-600">--</p>
+          <p className="text-3xl font-bold text-blue-600">{totalUsers || 0}</p>
           <p className="text-sm text-gray-500 mt-1">All registered users</p>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Active Coaches</h3>
-          <p className="text-3xl font-bold text-green-600">--</p>
+          <p className="text-3xl font-bold text-green-600">{activeCoaches || 0}</p>
           <p className="text-sm text-gray-500 mt-1">Verified coaches</p>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Total Bookings</h3>
-          <p className="text-3xl font-bold text-purple-600">--</p>
+          <p className="text-3xl font-bold text-purple-600">{totalBookings || 0}</p>
           <p className="text-sm text-gray-500 mt-1">All time bookings</p>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Revenue</h3>
-          <p className="text-3xl font-bold text-orange-600">--</p>
+          <p className="text-3xl font-bold text-orange-600">${(totalRevenue / 100).toFixed(2)}</p>
           <p className="text-sm text-gray-500 mt-1">Total platform revenue</p>
         </div>
       </div>

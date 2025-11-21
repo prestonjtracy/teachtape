@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import ReviewForm from '@/components/ReviewForm';
 
 interface Booking {
   id: string;
@@ -11,6 +12,7 @@ interface Booking {
   starts_at: string | null;
   ends_at: string | null;
   created_at: string;
+  booking_type?: 'live_lesson' | 'film_review' | null;
   coach: {
     full_name: string;
     avatar_url: string | null;
@@ -20,6 +22,7 @@ interface Booking {
     duration_minutes: number;
     description: string | null;
   } | null;
+  hasReview?: boolean;
 }
 
 export default function AthleteDashboard() {
@@ -27,6 +30,7 @@ export default function AthleteDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
+  const [reviewingBookingId, setReviewingBookingId] = useState<string | null>(null);
 
   const fetchBookings = async () => {
     if (!email) return;
@@ -183,17 +187,53 @@ export default function AthleteDashboard() {
                             <span>📅 {formatDate(booking.starts_at)}</span>
                             <span>⏱️ {booking.listing?.duration_minutes || 60} min</span>
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              booking.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                              booking.status === 'paid' ? 'bg-green-100 text-green-800' :
+                              booking.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                              'bg-gray-100 text-gray-800'
                             }`}>
                               {booking.status}
                             </span>
                           </div>
                         </div>
                       </div>
-                      <div className="text-lg font-medium text-gray-900">
-                        {formatCurrency(booking.amount_paid_cents)}
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="text-lg font-medium text-gray-900">
+                          {formatCurrency(booking.amount_paid_cents)}
+                        </div>
+                        {/* Show Leave Review button for completed live lessons without a review */}
+                        {booking.status === 'completed' &&
+                         (!booking.booking_type || booking.booking_type === 'live_lesson') &&
+                         !booking.hasReview && (
+                          <button
+                            onClick={() => setReviewingBookingId(booking.id)}
+                            className="bg-ttOrange hover:bg-ttOrange/90 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                          >
+                            Leave Review
+                          </button>
+                        )}
+                        {booking.hasReview && (
+                          <span className="text-xs text-gray-500 italic">Review submitted</span>
+                        )}
                       </div>
                     </div>
+
+                    {/* Review Form */}
+                    {reviewingBookingId === booking.id && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <ReviewForm
+                          bookingId={booking.id}
+                          coachName={booking.coach?.full_name || 'Coach'}
+                          onSuccess={() => {
+                            setReviewingBookingId(null);
+                            // Mark this booking as reviewed
+                            setBookings(prev => prev.map(b =>
+                              b.id === booking.id ? { ...b, hasReview: true } : b
+                            ));
+                          }}
+                          onCancel={() => setReviewingBookingId(null)}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

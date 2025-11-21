@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logAdminAction, AuditActions, getTargetIdentifier } from '@/lib/auditLog'
+import { requireAdmin } from '@/lib/auth/server'
 
 export const dynamic = 'force-dynamic';
 
@@ -9,23 +10,12 @@ export async function POST(request: NextRequest) {
     const { userId, action } = await request.json()
 
     // Verify admin access
+    const { user, error } = await requireAdmin()
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+
     const supabase = createClient()
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check if user is admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('auth_user_id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     // Use admin client for user management operations
     const adminSupabase = createAdminClient()
@@ -39,9 +29,31 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'promote':
+        // SECURITY: Prevent admin from modifying their own role
+        if (userId === user.id) {
+          return NextResponse.json(
+            { error: 'Cannot modify your own role' },
+            { status: 403 }
+          )
+        }
+
+        // SECURITY: Prevent modification of other admins
+        const { data: targetProfile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('auth_user_id', userId)
+          .single()
+
+        if (targetProfile?.role === 'admin') {
+          return NextResponse.json(
+            { error: 'Cannot modify admin accounts' },
+            { status: 403 }
+          )
+        }
+
         // Get user info for audit log
         const { data: targetUser } = await adminSupabase.auth.admin.getUserById(userId)
-        
+
         // Promote user to coach
         const { error: promoteError } = await supabase
           .from('profiles')
@@ -66,9 +78,31 @@ export async function POST(request: NextRequest) {
         break
 
       case 'delete':
+        // SECURITY: Prevent admin from deleting themselves
+        if (userId === user.id) {
+          return NextResponse.json(
+            { error: 'Cannot delete your own account' },
+            { status: 403 }
+          )
+        }
+
+        // SECURITY: Prevent deletion of other admins
+        const { data: deleteTargetProfile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('auth_user_id', userId)
+          .single()
+
+        if (deleteTargetProfile?.role === 'admin') {
+          return NextResponse.json(
+            { error: 'Cannot delete admin accounts' },
+            { status: 403 }
+          )
+        }
+
         // Get user info for audit log before deletion
         const { data: deleteTargetUser } = await adminSupabase.auth.admin.getUserById(userId)
-        
+
         // First delete profile
         const { error: profileDeleteError } = await supabase
           .from('profiles')

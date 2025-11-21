@@ -20,6 +20,8 @@ export interface Listing {
   price_cents: number;
   duration_minutes: number;
   description: string | null;
+  listing_type?: 'live_lesson' | 'film_review';
+  turnaround_hours?: number | null;
 }
 
 export interface CoachWithListings extends Coach {
@@ -160,7 +162,7 @@ export async function getCoachById(id: string): Promise<CoachResult<CoachWithLis
     console.log(`🔍 [getCoachById] Fetching listings for coach_id: ${validId}`);
     const { data: listings, error: listingsError } = await supabase
       .from("listings")
-      .select("id, title, price_cents, duration_minutes, description, is_active")
+      .select("id, title, price_cents, duration_minutes, description, is_active, listing_type, turnaround_hours")
       .eq("coach_id", validId)
       .eq("is_active", true)
       .order("created_at", { ascending: false });
@@ -170,6 +172,17 @@ export async function getCoachById(id: string): Promise<CoachResult<CoachWithLis
       listings: listings,
       error: listingsError
     });
+
+    // Debug: Log each listing's fields
+    if (listings && listings.length > 0) {
+      console.log(`🔍 [getCoachById] First listing details:`, {
+        title: listings[0].title,
+        price_cents: listings[0].price_cents,
+        listing_type: listings[0].listing_type,
+        turnaround_hours: listings[0].turnaround_hours,
+        description: listings[0].description
+      });
+    }
 
     if (listingsError) {
       console.error(`❌ [getCoachById] Listings fetch error:`, {

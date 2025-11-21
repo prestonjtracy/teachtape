@@ -1,13 +1,14 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { logAdminAction, AuditActions, getTargetIdentifier } from '@/lib/auditLog'
+import { logAdminAction, AuditActions } from '@/lib/auditLog'
+import { requireAdmin } from '@/lib/auth/server'
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
     const { listingId, tableType, action } = await request.json()
-    
+
     if (!listingId || !tableType || !action) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
     }
@@ -15,27 +16,14 @@ export async function POST(request: NextRequest) {
     if (!['services', 'listings'].includes(tableType)) {
       return NextResponse.json({ error: 'Invalid table type' }, { status: 400 })
     }
-    
+
     // Verify admin access
+    const { user, error } = await requireAdmin()
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+
     const supabase = createClient()
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check if user is admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('auth_user_id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    const adminSupabase = createAdminClient()
     const tableName = tableType
     const statusField = tableType === 'services' ? 'active' : 'is_active'
     const titleField = tableType === 'services' ? 'name' : 'title'
@@ -72,7 +60,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Log the action
-        const deactivateTitle = (listingToDeactivate as any)?.[titleField] as string | undefined
+        const deactivateTitle = listingToDeactivate ? (listingToDeactivate as Record<string, unknown>)[titleField] as string | undefined : undefined
         await logAdminAction(user.id, {
           action: AuditActions.LISTING_DEACTIVATED,
           targetType: 'listing',
@@ -106,7 +94,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Log the action
-        const activateTitle = (listingToActivate as any)?.[titleField] as string | undefined
+        const activateTitle = listingToActivate ? (listingToActivate as Record<string, unknown>)[titleField] as string | undefined : undefined
         await logAdminAction(user.id, {
           action: AuditActions.LISTING_ACTIVATED,
           targetType: 'listing',
@@ -140,7 +128,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Log the action
-        const deleteTitle = (listingToDelete as any)?.[titleField] as string | undefined
+        const deleteTitle = listingToDelete ? (listingToDelete as Record<string, unknown>)[titleField] as string | undefined : undefined
         await logAdminAction(user.id, {
           action: AuditActions.LISTING_DELETED,
           targetType: 'listing',

@@ -1,36 +1,27 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { headers } from 'next/headers'
+import { requireAdmin } from '@/lib/auth/server'
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
     const { settingId, settingKey, value, oldValue } = await request.json()
-    
+
     if (!settingId || !settingKey) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
     }
-    
+
     // Verify admin access
+    const { user, error } = await requireAdmin()
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+
     const supabase = createClient()
     const adminSupabase = createAdminClient()
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check if user is admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, role')
-      .eq('auth_user_id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const profile = user.profile!
 
     // Get admin email for audit log
     const { data: authUser } = await adminSupabase.auth.admin.getUserById(user.id)

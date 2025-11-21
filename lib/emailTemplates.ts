@@ -35,31 +35,58 @@ export interface BookingEmailData {
 export interface BookingRequestEmailData {
   // Request details
   requestId: string;
-  
+
   // Athlete details
   athleteEmail: string;
   athleteName?: string;
-  
+
   // Coach details
   coachName: string;
   coachEmail: string;
-  
+
   // Service details
   listingTitle: string;
   listingDescription?: string;
   duration?: number; // in minutes
   priceCents: number;
-  
+
   // Proposed timing
   proposedStart: Date;
   proposedEnd: Date;
   timezone: string;
-  
+
   // Request date
   requestedAt: Date;
-  
+
   // Chat link
   chatUrl?: string;
+}
+
+export interface FilmReviewEmailData {
+  // Booking details
+  bookingId: string;
+
+  // Athlete details
+  athleteEmail: string;
+  athleteName?: string;
+
+  // Coach details
+  coachName: string;
+  coachEmail?: string;
+
+  // Service details
+  listingTitle: string;
+  turnaroundHours: number;
+  priceCents: number;
+
+  // Film review specific
+  filmUrl?: string;
+  athleteNotes?: string;
+  reviewDocumentUrl?: string;
+  deadline?: Date;
+
+  // App URL for links
+  appUrl: string;
 }
 
 /**
@@ -1304,6 +1331,515 @@ ${data.chatUrl ? `Continue Chat: ${data.chatUrl}\n` : ''}
 Don't give up! There are many great coaches on TeachTape who are ready to help you improve your skills.
 
 Keep training!
+
+---
+This is an automated notification email.
+`;
+
+  return { subject, html, text };
+}
+
+/**
+ * Email template for athlete when coach accepts film review
+ */
+export function generateFilmReviewAcceptedAthleteEmail(data: FilmReviewEmailData): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const formatDeadline = (date: Date) => date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  const subject = `Film Review Accepted: ${data.coachName} is working on your review`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Film Review Accepted - TeachTape</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+    .container {
+      background: white;
+      border-radius: 8px;
+      padding: 32px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid #28a745;
+    }
+    .success-badge {
+      background: #d4edda;
+      color: #155724;
+      padding: 12px 20px;
+      border-radius: 6px;
+      margin-bottom: 24px;
+      text-align: center;
+      font-weight: bold;
+    }
+    .details {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .detail-label {
+      font-weight: bold;
+      color: #666;
+    }
+    .deadline-box {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 16px 20px;
+      margin: 24px 0;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid #eee;
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>TeachTape</h1>
+    </div>
+
+    <div class="success-badge">
+      🎬 Film Review Accepted!
+    </div>
+
+    <p>Hi${data.athleteName ? ` ${data.athleteName}` : ''},</p>
+
+    <p>Great news! ${data.coachName} has accepted your film review request and is now working on your personalized analysis.</p>
+
+    <div class="details">
+      <h3 style="margin-top: 0;">Review Details</h3>
+      <div class="detail-row">
+        <span class="detail-label">Service:</span>
+        <span>${data.listingTitle}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Coach:</span>
+        <span>${data.coachName}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Amount Paid:</span>
+        <span style="color: #28a745; font-weight: bold;">${formatCurrency(data.priceCents)}</span>
+      </div>
+    </div>
+
+    <div class="deadline-box">
+      <h3 style="margin-top: 0; color: #856404;">Expected Delivery</h3>
+      <p style="margin: 0; font-size: 18px; font-weight: bold;">
+        ${data.deadline ? formatDeadline(data.deadline) : `Within ${data.turnaroundHours} hours`}
+      </p>
+      <p style="margin: 8px 0 0 0; font-size: 14px; color: #666;">
+        You'll receive an email notification when your review is ready.
+      </p>
+    </div>
+
+    <p>Your payment is secured and will be released to the coach upon delivery of your review. You can track the status in your dashboard.</p>
+
+    <div class="footer">
+      <p>Thank you for choosing TeachTape!</p>
+      <p style="font-size: 12px; color: #999;">
+        This is an automated confirmation email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `
+FILM REVIEW ACCEPTED - TeachTape
+
+Hi${data.athleteName ? ` ${data.athleteName}` : ''},
+
+Great news! ${data.coachName} has accepted your film review request and is now working on your personalized analysis.
+
+REVIEW DETAILS:
+- Service: ${data.listingTitle}
+- Coach: ${data.coachName}
+- Amount Paid: ${formatCurrency(data.priceCents)}
+
+EXPECTED DELIVERY:
+${data.deadline ? formatDeadline(data.deadline) : `Within ${data.turnaroundHours} hours`}
+
+You'll receive an email notification when your review is ready.
+
+Your payment is secured and will be released to the coach upon delivery of your review. You can track the status in your dashboard.
+
+Thank you for choosing TeachTape!
+
+---
+This is an automated confirmation email.
+`;
+
+  return { subject, html, text };
+}
+
+/**
+ * Email template for athlete when coach declines film review
+ */
+export function generateFilmReviewDeclinedAthleteEmail(data: FilmReviewEmailData): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+
+  const subject = `Film Review Update: Refund Processed`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Film Review Refund - TeachTape</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+    .container {
+      background: white;
+      border-radius: 8px;
+      padding: 32px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid #6c757d;
+    }
+    .refund-badge {
+      background: #d4edda;
+      color: #155724;
+      padding: 12px 20px;
+      border-radius: 6px;
+      margin-bottom: 24px;
+      text-align: center;
+      font-weight: bold;
+    }
+    .details {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .detail-label {
+      font-weight: bold;
+      color: #666;
+    }
+    .suggestions {
+      background: #e7f3ff;
+      border-left: 4px solid #007bff;
+      padding: 16px 20px;
+      margin: 24px 0;
+    }
+    .button {
+      display: inline-block;
+      background: #007bff;
+      color: white;
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      margin: 16px 0;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid #eee;
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>TeachTape</h1>
+    </div>
+
+    <div class="refund-badge">
+      💰 Full Refund Processed
+    </div>
+
+    <p>Hi${data.athleteName ? ` ${data.athleteName}` : ''},</p>
+
+    <p>Unfortunately, ${data.coachName} is unable to complete your film review request at this time. <strong>A full refund has been automatically processed.</strong></p>
+
+    <div class="details">
+      <h3 style="margin-top: 0;">Refund Details</h3>
+      <div class="detail-row">
+        <span class="detail-label">Service:</span>
+        <span>${data.listingTitle}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Amount Refunded:</span>
+        <span style="color: #28a745; font-weight: bold;">${formatCurrency(data.priceCents)}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Status:</span>
+        <span>Refund issued - will appear in 5-10 business days</span>
+      </div>
+    </div>
+
+    <div class="suggestions">
+      <h3 style="margin-top: 0; color: #007bff;">What's Next?</h3>
+      <ul style="margin: 0; padding-left: 20px;">
+        <li>Your refund will appear in your account within 5-10 business days</li>
+        <li>Browse other qualified coaches who offer film reviews</li>
+        <li>Try requesting from a different coach</li>
+      </ul>
+      <div style="margin-top: 16px;">
+        <a href="${data.appUrl}/coaches" class="button">Browse Other Coaches</a>
+      </div>
+    </div>
+
+    <p>Don't worry - there are many expert coaches on TeachTape ready to help analyze your film!</p>
+
+    <div class="footer">
+      <p>Keep improving!</p>
+      <p style="font-size: 12px; color: #999;">
+        This is an automated notification email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `
+FILM REVIEW REFUND PROCESSED - TeachTape
+
+Hi${data.athleteName ? ` ${data.athleteName}` : ''},
+
+Unfortunately, ${data.coachName} is unable to complete your film review request at this time. A full refund has been automatically processed.
+
+REFUND DETAILS:
+- Service: ${data.listingTitle}
+- Amount Refunded: ${formatCurrency(data.priceCents)}
+- Status: Refund issued - will appear in 5-10 business days
+
+WHAT'S NEXT:
+- Your refund will appear in your account within 5-10 business days
+- Browse other qualified coaches who offer film reviews
+- Try requesting from a different coach
+
+Browse Other Coaches: ${data.appUrl}/coaches
+
+Don't worry - there are many expert coaches on TeachTape ready to help analyze your film!
+
+Keep improving!
+
+---
+This is an automated notification email.
+`;
+
+  return { subject, html, text };
+}
+
+/**
+ * Email template for athlete when review is completed
+ */
+export function generateFilmReviewCompletedAthleteEmail(data: FilmReviewEmailData): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const subject = `Your Film Review is Ready: ${data.listingTitle}`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Film Review Complete - TeachTape</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+    .container {
+      background: white;
+      border-radius: 8px;
+      padding: 32px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid #28a745;
+    }
+    .success-badge {
+      background: #d4edda;
+      color: #155724;
+      padding: 12px 20px;
+      border-radius: 6px;
+      margin-bottom: 24px;
+      text-align: center;
+      font-weight: bold;
+    }
+    .details {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .detail-label {
+      font-weight: bold;
+      color: #666;
+    }
+    .review-box {
+      background: #e7f3ff;
+      border-left: 4px solid #007bff;
+      padding: 16px 20px;
+      margin: 24px 0;
+      text-align: center;
+    }
+    .button {
+      display: inline-block;
+      background: #FF5A1F;
+      color: white;
+      padding: 14px 28px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      margin: 16px 0;
+      font-size: 16px;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid #eee;
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>TeachTape</h1>
+    </div>
+
+    <div class="success-badge">
+      🎉 Your Film Review is Complete!
+    </div>
+
+    <p>Hi${data.athleteName ? ` ${data.athleteName}` : ''},</p>
+
+    <p>Great news! ${data.coachName} has completed your personalized film analysis and it's ready for you to review.</p>
+
+    <div class="details">
+      <h3 style="margin-top: 0;">Review Summary</h3>
+      <div class="detail-row">
+        <span class="detail-label">Service:</span>
+        <span>${data.listingTitle}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Coach:</span>
+        <span>${data.coachName}</span>
+      </div>
+    </div>
+
+    <div class="review-box">
+      <h3 style="margin-top: 0; color: #007bff;">Access Your Review</h3>
+      <p style="margin: 8px 0 16px 0;">Click below to view your detailed film analysis:</p>
+      <a href="${data.reviewDocumentUrl}" class="button">View Your Review</a>
+      <p style="margin: 16px 0 0 0; font-size: 14px; color: #666;">
+        You can also access this review anytime from your dashboard.
+      </p>
+    </div>
+
+    <p>We hope this analysis helps you take your game to the next level! Consider booking another review as you continue to improve.</p>
+
+    <div class="footer">
+      <p>Thank you for choosing TeachTape!</p>
+      <p style="font-size: 12px; color: #999;">
+        This is an automated notification email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `
+YOUR FILM REVIEW IS COMPLETE - TeachTape
+
+Hi${data.athleteName ? ` ${data.athleteName}` : ''},
+
+Great news! ${data.coachName} has completed your personalized film analysis and it's ready for you to review.
+
+REVIEW SUMMARY:
+- Service: ${data.listingTitle}
+- Coach: ${data.coachName}
+
+ACCESS YOUR REVIEW:
+${data.reviewDocumentUrl}
+
+You can also access this review anytime from your dashboard.
+
+We hope this analysis helps you take your game to the next level! Consider booking another review as you continue to improve.
+
+Thank you for choosing TeachTape!
 
 ---
 This is an automated notification email.

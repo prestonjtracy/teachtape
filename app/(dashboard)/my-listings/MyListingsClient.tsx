@@ -14,6 +14,8 @@ interface Listing {
   is_active: boolean;
   image_url?: string;
   created_at: string;
+  listing_type?: 'live_lesson' | 'film_review';
+  turnaround_hours?: number;
 }
 
 interface Profile {
@@ -34,7 +36,9 @@ export default function MyListingsClient() {
     price_cents: '',
     duration_minutes: '60',
     image_url: '',
-    is_active: true
+    is_active: true,
+    listing_type: 'live_lesson' as 'live_lesson' | 'film_review',
+    turnaround_hours: '48'
   });
   const [toast, setToast] = useState<{show: boolean; message: string; type: 'success' | 'error'}>({
     show: false,
@@ -89,10 +93,14 @@ export default function MyListingsClient() {
             description: formData.description,
             price_cents: parseInt(formData.price_cents),
             duration_minutes: parseInt(formData.duration_minutes),
-            is_active: formData.is_active
+            is_active: formData.is_active,
+            listing_type: formData.listing_type,
+            turnaround_hours: formData.listing_type === 'film_review'
+              ? parseInt(formData.turnaround_hours)
+              : null
           })
           .eq('id', editingListing.id);
-        
+
         if (error) throw error;
         setToast({ show: true, message: 'Listing updated successfully!', type: 'success' });
       } else {
@@ -105,9 +113,13 @@ export default function MyListingsClient() {
             description: formData.description,
             price_cents: parseInt(formData.price_cents),
             duration_minutes: parseInt(formData.duration_minutes),
-            is_active: formData.is_active
+            is_active: formData.is_active,
+            listing_type: formData.listing_type,
+            turnaround_hours: formData.listing_type === 'film_review'
+              ? parseInt(formData.turnaround_hours)
+              : null
           });
-        
+
         if (error) throw error;
         setToast({ show: true, message: 'Listing created successfully!', type: 'success' });
       }
@@ -120,7 +132,9 @@ export default function MyListingsClient() {
         price_cents: '',
         duration_minutes: '60',
         image_url: '',
-        is_active: true
+        is_active: true,
+        listing_type: 'live_lesson',
+        turnaround_hours: '48'
       });
       
       // Reload listings
@@ -166,7 +180,9 @@ export default function MyListingsClient() {
       price_cents: listing.price_cents.toString(),
       duration_minutes: listing.duration_minutes.toString(),
       image_url: listing.image_url || '',
-      is_active: listing.is_active
+      is_active: listing.is_active,
+      listing_type: listing.listing_type || 'live_lesson',
+      turnaround_hours: (listing.turnaround_hours || 48).toString()
     });
     setShowForm(true);
   }
@@ -197,7 +213,9 @@ export default function MyListingsClient() {
       price_cents: '',
       duration_minutes: '60',
       image_url: '',
-      is_active: true
+      is_active: true,
+      listing_type: 'live_lesson',
+      turnaround_hours: '48'
     });
   }
 
@@ -254,6 +272,52 @@ export default function MyListingsClient() {
             <form onSubmit={handleSubmit} className="px-8 py-6 space-y-6">
               <div>
                 <label className="block text-sm font-semibold text-neutral-text mb-2">
+                  Listing Type *
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, listing_type: 'live_lesson' }))}
+                    className={`p-4 rounded-lg border-2 transition-all duration-200 text-left ${
+                      formData.listing_type === 'live_lesson'
+                        ? 'border-ttOrange bg-ttOrange/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <svg className="w-6 h-6 text-ttOrange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      <span className="font-semibold text-neutral-text">Live Lesson</span>
+                    </div>
+                    <p className="text-sm text-neutral-text-secondary">
+                      Real-time video coaching session via Zoom
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, listing_type: 'film_review' }))}
+                    className={`p-4 rounded-lg border-2 transition-all duration-200 text-left ${
+                      formData.listing_type === 'film_review'
+                        ? 'border-ttOrange bg-ttOrange/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <svg className="w-6 h-6 text-ttOrange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2m10 2V2M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zM7 8h10M7 12h10M7 16h4" />
+                      </svg>
+                      <span className="font-semibold text-neutral-text">Film Review</span>
+                    </div>
+                    <p className="text-sm text-neutral-text-secondary">
+                      Written analysis of athlete's video footage
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-neutral-text mb-2">
                   Service Title *
                 </label>
                 <input
@@ -262,7 +326,7 @@ export default function MyListingsClient() {
                   value={formData.title}
                   onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ttOrange focus:border-ttOrange transition-colors"
-                  placeholder="e.g. Basketball Training Session"
+                  placeholder={formData.listing_type === 'film_review' ? 'e.g. Game Film Analysis' : 'e.g. Basketball Training Session'}
                 />
               </div>
 
@@ -299,19 +363,41 @@ export default function MyListingsClient() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-neutral-text mb-2">
-                    Duration (minutes) *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    value={formData.duration_minutes}
-                    onChange={(e) => setFormData(prev => ({ ...prev, duration_minutes: e.target.value }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ttOrange focus:border-ttOrange transition-colors"
-                    placeholder="60"
-                  />
-                </div>
+                {formData.listing_type === 'live_lesson' ? (
+                  <div>
+                    <label className="block text-sm font-semibold text-neutral-text mb-2">
+                      Duration (minutes) *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      value={formData.duration_minutes}
+                      onChange={(e) => setFormData(prev => ({ ...prev, duration_minutes: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ttOrange focus:border-ttOrange transition-colors"
+                      placeholder="60"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-semibold text-neutral-text mb-2">
+                      Turnaround Time (hours) *
+                    </label>
+                    <select
+                      value={formData.turnaround_hours}
+                      onChange={(e) => setFormData(prev => ({ ...prev, turnaround_hours: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ttOrange focus:border-ttOrange transition-colors"
+                    >
+                      <option value="24">24 hours</option>
+                      <option value="48">48 hours (standard)</option>
+                      <option value="72">72 hours</option>
+                      <option value="96">96 hours (4 days)</option>
+                      <option value="168">168 hours (1 week)</option>
+                    </select>
+                    <p className="mt-1 text-xs text-neutral-text-muted">
+                      Time you have to deliver the review after accepting the request
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -391,20 +477,27 @@ export default function MyListingsClient() {
                       <div className="flex items-center gap-3 mb-3">
                         <h3 className="text-xl font-bold text-ttBlue truncate">{listing.title}</h3>
                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                          listing.is_active 
-                            ? 'bg-green-100 text-green-700' 
+                          listing.listing_type === 'film_review'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {listing.listing_type === 'film_review' ? 'Film Review' : 'Live Lesson'}
+                        </span>
+                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                          listing.is_active
+                            ? 'bg-green-100 text-green-700'
                             : 'bg-gray-100 text-gray-600'
                         }`}>
                           {listing.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </div>
-                      
+
                       {listing.description && (
                         <p className="text-neutral-text-secondary mb-4 line-clamp-2">
                           {listing.description}
                         </p>
                       )}
-                      
+
                       <div className="flex flex-wrap gap-4 text-sm">
                         <div className="flex items-center gap-2">
                           <svg className="w-4 h-4 text-ttOrange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -419,7 +512,10 @@ export default function MyListingsClient() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           <span className="text-neutral-text">
-                            {listing.duration_minutes} minutes
+                            {listing.listing_type === 'film_review'
+                              ? `${listing.turnaround_hours || 48}hr turnaround`
+                              : `${listing.duration_minutes} minutes`
+                            }
                           </span>
                         </div>
                       </div>

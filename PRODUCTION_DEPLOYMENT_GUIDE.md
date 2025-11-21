@@ -96,7 +96,7 @@ Verify Row Level Security is enabled on all tables:
    - **Client ID**
    - **Client Secret**
 
-### Configure Webhook (Optional)
+### Configure Webhook (Recommended)
 1. In your Zoom app, go to Features → Event Subscriptions
 2. Add event subscription URL: `https://yourdomain.com/api/zoom/webhook`
 3. Select events:
@@ -104,7 +104,9 @@ Verify Row Level Security is enabled on all tables:
    - Meeting Ended
    - Participant Joined
    - Participant Left
-4. Generate a **Verification Token** (any random string)
+4. Copy the **Secret Token** that Zoom generates
+
+**📖 For detailed Zoom setup instructions, see [ZOOM_CONFIGURATION_GUIDE.md](ZOOM_CONFIGURATION_GUIDE.md)**
 
 ---
 
@@ -153,7 +155,7 @@ STRIPE_CONNECT_CLIENT_ID=ca_...
 ZOOM_ACCOUNT_ID=your-account-id
 ZOOM_CLIENT_ID=your-client-id
 ZOOM_CLIENT_SECRET=your-client-secret
-ZOOM_VERIFICATION_TOKEN=your-verification-token
+ZOOM_WEBHOOK_SECRET=your-webhook-secret
 ```
 
 #### Email
@@ -358,7 +360,7 @@ STRIPE_CONNECT_CLIENT_ID=
 ZOOM_ACCOUNT_ID=
 ZOOM_CLIENT_ID=
 ZOOM_CLIENT_SECRET=
-ZOOM_VERIFICATION_TOKEN=
+ZOOM_WEBHOOK_SECRET=
 
 # --- Email ---
 RESEND_API_KEY=

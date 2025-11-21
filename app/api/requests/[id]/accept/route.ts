@@ -13,7 +13,11 @@ const AcceptRequestSchema = z.object({
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const startTime = Date.now();
-  const requestId = params.id;
+
+  // Validate request ID
+  const validatedData = AcceptRequestSchema.parse(params);
+  const requestId = validatedData.id;
+
   console.log(`🔍 [POST /api/requests/[id]/accept] ===== REQUEST START ===== ID: ${requestId}, Time: ${new Date().toISOString()}`);
 
   try {
@@ -27,10 +31,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
-    
-    // Validate request ID
-    const validatedData = AcceptRequestSchema.parse(params);
-    const requestId = validatedData.id;
 
     const supabase = createClientForApiRoute(req);
 
@@ -235,7 +235,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         transfer_data: {
           destination: coachStripeAccountId,
         },
-        // Removed on_behalf_of to avoid card_payments capability requirement
+        on_behalf_of: coachStripeAccountId, // Coach is merchant of record for disputes/refunds
         metadata: {
           booking_request_id: requestId,
           listing_id: bookingRequest.listing_id,
@@ -348,7 +348,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Create Zoom meeting for the session
     let zoomJoinUrl: string | null = null;
     let zoomStartUrl: string | null = null;
-    
+    let zoomMeetingId: string | null = null;
+
     try {
       console.log('🎥 [POST /api/requests/accept] Creating Zoom meeting...');
       const meetingDetails = await createMeeting({
@@ -358,10 +359,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         coach_email: user.email!,
         athlete_name: bookingRequest.athlete.full_name || 'Athlete',
       });
-      
+
       zoomJoinUrl = meetingDetails.join_url;
       zoomStartUrl = meetingDetails.host_join_url;
-      
+      zoomMeetingId = meetingDetails.id;
+
       console.log('✅ [POST /api/requests/accept] Zoom meeting created:', meetingDetails.id);
     } catch (zoomError) {
       console.error('❌ [POST /api/requests/accept] Zoom meeting creation failed:', zoomError);
@@ -385,6 +387,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         stripe_session_id: paymentIntent.id, // Use payment_intent_id as session_id for Connect payments
         zoom_join_url: zoomJoinUrl,
         zoom_start_url: zoomStartUrl,
+        zoom_meeting_id: zoomMeetingId,
       })
       .select('id')
       .single();

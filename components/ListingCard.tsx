@@ -5,6 +5,8 @@ interface Listing {
   duration_minutes: number;
   description: string | null;
   image_url?: string | null;
+  listing_type?: 'live_lesson' | 'film_review';
+  turnaround_hours?: number | null;
 }
 
 interface ListingCardProps {
@@ -30,6 +32,18 @@ function formatDuration(minutes: number): string {
   return `${minutes} min`;
 }
 
+function formatTurnaround(hours: number): string {
+  if (hours < 24) {
+    return `${hours}h turnaround`;
+  }
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  if (remainingHours === 0) {
+    return `${days} day${days > 1 ? 's' : ''} turnaround`;
+  }
+  return `${days}d ${remainingHours}h turnaround`;
+}
+
 export default function ListingCard({ listing, onBookSession, loading, bookingFlow = 'request' }: ListingCardProps) {
   return (
     <div className="rounded-xl bg-white shadow-sm ring-1 ring-black/5 hover:shadow-md transition-all duration-200 overflow-hidden group h-full flex flex-col">
@@ -50,7 +64,7 @@ export default function ListingCard({ listing, onBookSession, loading, bookingFl
           {listing.title || "Untitled Session"}
         </h3>
 
-        {/* Price and Duration */}
+        {/* Price and Duration/Turnaround */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-4">
             <div className="flex items-center text-lg font-semibold text-[#123C7A]">
@@ -63,7 +77,9 @@ export default function ListingCard({ listing, onBookSession, loading, bookingFl
               <svg className="w-4 h-4 mr-1.5 text-[#FF5A1F]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              {formatDuration(listing.duration_minutes)}
+              {listing.listing_type === 'film_review' && listing.turnaround_hours
+                ? formatTurnaround(listing.turnaround_hours)
+                : formatDuration(listing.duration_minutes)}
             </div>
           </div>
         </div>
@@ -101,7 +117,10 @@ export default function ListingCard({ listing, onBookSession, loading, bookingFl
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z" />
                 )}
               </svg>
-              {bookingFlow === 'request' ? 'Request Time' : 'Book Session'}
+              {listing.listing_type === 'film_review'
+                ? 'Request Review'
+                : (bookingFlow === 'request' ? 'Request Time' : 'Book Session')
+              }
             </div>
           )}
         </button>

@@ -6,6 +6,8 @@ export const dynamic = 'force-dynamic';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_FILE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+const MAX_IMAGE_DIMENSION = 4096; // 4096px max width/height
+const MIN_IMAGE_DIMENSION = 100; // 100px min width/height
 
 const UploadGalleryImageSchema = z.object({
   caption: z.string().max(500, "Caption too long").optional(),
@@ -113,6 +115,47 @@ export async function POST(req: NextRequest) {
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
       return NextResponse.json(
         { error: "File type must be JPG, PNG, or WebP" },
+        { status: 400 }
+      );
+    }
+
+    // SECURITY: Validate image dimensions to prevent abuse
+    try {
+      // Create a blob URL from the buffer
+      const blob = new Blob([fileBuffer], { type: file.type });
+
+      // Use Image API to get dimensions (works in Node.js 18+)
+      const imageBitmap = await createImageBitmap(blob);
+      const { width, height } = imageBitmap;
+      imageBitmap.close(); // Clean up
+
+      // Check minimum dimensions
+      if (width < MIN_IMAGE_DIMENSION || height < MIN_IMAGE_DIMENSION) {
+        return NextResponse.json(
+          {
+            error: `Image dimensions too small. Minimum ${MIN_IMAGE_DIMENSION}x${MIN_IMAGE_DIMENSION}px required.`,
+            details: `Uploaded image: ${width}x${height}px`
+          },
+          { status: 400 }
+        );
+      }
+
+      // Check maximum dimensions
+      if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+        return NextResponse.json(
+          {
+            error: `Image dimensions too large. Maximum ${MAX_IMAGE_DIMENSION}x${MAX_IMAGE_DIMENSION}px allowed.`,
+            details: `Uploaded image: ${width}x${height}px`
+          },
+          { status: 400 }
+        );
+      }
+
+      console.log(`✅ [POST /api/coach-gallery/upload] Image dimensions validated: ${width}x${height}px`);
+    } catch (dimensionError) {
+      console.error('❌ [POST /api/coach-gallery/upload] Failed to validate image dimensions:', dimensionError);
+      return NextResponse.json(
+        { error: "Failed to process image. File may be corrupted." },
         { status: 400 }
       );
     }

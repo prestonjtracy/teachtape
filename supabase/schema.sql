@@ -21,6 +21,9 @@ create table if not exists listings (
   price_cents integer not null,
   duration_minutes integer not null default 60,
   is_active boolean not null default true,
+  listing_type text not null default 'live_lesson' check (listing_type in ('live_lesson', 'film_review')),
+  turnaround_hours integer,
+  review_format text,
   created_at timestamptz default now()
 );
 
@@ -64,4 +67,4 @@ create table if not exists reviews (
   created_at timestamptz default now()
 );
 
--- TODO: Add RLS policies per table
+-- RLS policies are implemented in migration 028_add_missing_rls_policies.sql

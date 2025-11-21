@@ -4,7 +4,19 @@ import { useState } from 'react';
 import ProfileHeader from '@/components/ProfileHeader';
 import ListingCard from '@/components/ListingCard';
 import RequestTimeModal from '@/components/RequestTimeModal';
+import RequestFilmReviewModal from '@/components/RequestFilmReviewModal';
 import CoachGalleryDisplay from '@/components/CoachGalleryDisplay';
+import CoachReviews from '@/components/CoachReviews';
+
+interface Listing {
+  id: string;
+  title: string | null;
+  price_cents: number;
+  duration_minutes: number;
+  description: string | null;
+  listing_type?: 'live_lesson' | 'film_review';
+  turnaround_hours?: number | null;
+}
 
 interface Coach {
   id: string;
@@ -14,13 +26,7 @@ interface Coach {
   avatar_url: string | null;
   bio: string | null;
   sport: string | null;
-  listings: Array<{
-    id: string;
-    title: string | null;
-    price_cents: number;
-    duration_minutes: number;
-    description: string | null;
-  }>;
+  listings: Listing[];
 }
 
 interface CoachPageClientProps {
@@ -31,14 +37,31 @@ interface CoachPageClientProps {
 export default function CoachPageClient({ coach }: CoachPageClientProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [selectedListing, setSelectedListing] = useState<Coach['listings'][0] | null>(null);
-  
+  const [showFilmReviewModal, setShowFilmReviewModal] = useState(false);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+
   // Get booking flow from environment (default to 'request')
   const bookingFlow = (process.env.NEXT_PUBLIC_BOOKING_FLOW as 'legacy' | 'request') || 'request';
 
-  const handleBookService = async (listing: Coach['listings'][0]) => {
+  // Debug: Log the actual listing data
+  console.log('🔍 [CoachPageClient] All listings:', coach.listings);
+  console.log('🔍 [CoachPageClient] Sample listing:', coach.listings[0]);
+
+  // Separate listings by type
+  const liveLessons = coach.listings.filter(l => !l.listing_type || l.listing_type === 'live_lesson');
+  const filmReviews = coach.listings.filter(l => l.listing_type === 'film_review');
+
+  console.log('🔍 [CoachPageClient] Film reviews:', filmReviews);
+
+  const handleBookService = async (listing: Listing) => {
     if (bookingFlow === 'request') {
-      // New flow: Show request time modal
+      // Check if this is a film review or live lesson
+      if (listing.listing_type === 'film_review') {
+        setSelectedListing(listing);
+        setShowFilmReviewModal(true);
+        return;
+      }
+      // New flow: Show request time modal for live lessons
       setSelectedListing(listing);
       setShowRequestModal(true);
       return;
@@ -46,7 +69,7 @@ export default function CoachPageClient({ coach }: CoachPageClientProps) {
 
     // Legacy flow: Direct checkout
     setLoading(listing.id);
-    
+
     try {
       console.log('🔍 [handleBookService] Starting checkout for:', {
         listing_id: listing.id,
@@ -67,17 +90,17 @@ export default function CoachPageClient({ coach }: CoachPageClientProps) {
 
       const data = await response.json();
       console.log('📦 [handleBookService] Checkout response:', data);
-      
+
       if (!response.ok) {
         // Handle specific error cases with user-friendly messages
         let errorMessage = data.error || 'Failed to create checkout session';
-        
+
         if (errorMessage.includes('Coach payment setup incomplete')) {
           errorMessage = 'This coach hasn\'t completed their payment setup yet. Please try again later or contact the coach directly.';
         } else if (errorMessage.includes('Listing not found')) {
           errorMessage = 'This coaching session is no longer available.';
         }
-        
+
         throw new Error(errorMessage);
       }
 
@@ -91,14 +114,15 @@ export default function CoachPageClient({ coach }: CoachPageClientProps) {
       }
     } catch (err) {
       console.error('❌ [handleBookService] Error:', err);
-      
+
       // Show user-friendly error message
       const message = err instanceof Error ? err.message : 'Failed to proceed to checkout';
       alert(`Unable to book session: ${message}`);
-      
+
       setLoading(null);
     }
   };
+
 
   return (
     <main className="min-h-screen bg-[#F5F7FB] py-8">
@@ -114,22 +138,22 @@ export default function CoachPageClient({ coach }: CoachPageClientProps) {
       </div>
 
       {/* Gallery Section */}
-      <CoachGalleryDisplay 
-        coachId={coach.id} 
-        coachName={coach.full_name || undefined} 
+      <CoachGalleryDisplay
+        coachId={coach.id}
+        coachName={coach.full_name || undefined}
       />
 
-      {/* Listings Section */}
+      {/* Live Lessons Section */}
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-        {coach.listings.length > 0 ? (
-          <>
+        {liveLessons.length > 0 && (
+          <section className="mb-12">
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-[#123C7A] mb-2">Available Sessions</h2>
-              <p className="text-gray-600">Book a coaching session with {coach.full_name?.split(' ')[0] || 'this coach'}</p>
+              <h2 className="text-2xl font-bold text-[#123C7A] mb-2">Live Lessons</h2>
+              <p className="text-gray-600">Book a 1-on-1 coaching session with {coach.full_name?.split(' ')[0] || 'this coach'}</p>
             </div>
-            
+
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {coach.listings.map((listing) => (
+              {liveLessons.map((listing) => (
                 <ListingCard
                   key={listing.id}
                   listing={listing}
@@ -139,30 +163,55 @@ export default function CoachPageClient({ coach }: CoachPageClientProps) {
                 />
               ))}
             </div>
-          </>
-        ) : (
-          <div className="text-center py-12">
-            <div className="rounded-xl bg-white shadow-sm ring-1 ring-black/5 p-8 max-w-md mx-auto">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#F5F7FB] flex items-center justify-center">
-                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-[#123C7A] mb-2">No Sessions Available</h3>
-              <p className="text-gray-600 text-sm">
-                This coach hasn't published any sessions yet. Check back later!
-              </p>
-            </div>
-          </div>
+          </section>
         )}
+
+        {/* Film Reviews Section */}
+        {filmReviews.length > 0 && (
+          <section className="mb-12">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-[#123C7A] mb-2">Film Reviews</h2>
+              <p className="text-gray-600">Get personalized analysis of your game film</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {filmReviews.map((listing) => (
+                <ListingCard
+                  key={listing.id}
+                  listing={listing}
+                  onBookSession={handleBookService}
+                  loading={loading === listing.id}
+                  bookingFlow={bookingFlow}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Reviews Section */}
+        <CoachReviews coachId={coach.id} coachName={coach.full_name || 'this coach'} />
       </div>
-      
-      {/* Request Time Modal */}
-      {selectedListing && (
+
+      {/* Request Time Modal (for live lessons) */}
+      {showRequestModal && selectedListing && selectedListing.listing_type !== 'film_review' && (
         <RequestTimeModal
           isOpen={showRequestModal}
           onClose={() => {
             setShowRequestModal(false);
+            setSelectedListing(null);
+          }}
+          coachId={coach.id}
+          coachName={coach.full_name || 'Coach'}
+          listing={selectedListing}
+        />
+      )}
+
+      {/* Request Film Review Modal */}
+      {showFilmReviewModal && selectedListing && selectedListing.listing_type === 'film_review' && (
+        <RequestFilmReviewModal
+          isOpen={showFilmReviewModal}
+          onClose={() => {
+            setShowFilmReviewModal(false);
             setSelectedListing(null);
           }}
           coachId={coach.id}

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { sanitizeText } from "@/lib/sanitization";
 
 export const dynamic = 'force-dynamic';
 
 const UpdateCaptionSchema = z.object({
-  caption: z.string().max(500, "Caption too long").optional(),
+  caption: z.string()
+    .max(500, "Caption too long")
+    .transform(val => sanitizeText(val)) // XSS protection
+    .optional(),
 });
 
 const UpdateCaptionParamsSchema = z.object({

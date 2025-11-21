@@ -1,16 +1,81 @@
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { sendBookingEmailsAsync } from "@/lib/email";
 import { getFeeBreakdown } from "@/lib/stripeFees";
 import { BookingEmailData } from "@/lib/emailTemplates";
+import { applyRateLimit } from "@/lib/rateLimitHelpers";
+import { sanitizeDBError, logError } from "@/lib/errorHandling";
 
 // Force Node.js runtime for webhook handling
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * Determine if an error should trigger a webhook retry
+ * Returns true for temporary/transient errors (DB connection, network issues)
+ * Returns false for permanent errors (validation, bad data)
+ */
+function isRetryableError(error: any): boolean {
+  // Database connection errors (temporary)
+  if (error?.code === 'ECONNREFUSED' ||
+      error?.code === 'ETIMEDOUT' ||
+      error?.code === 'ENOTFOUND' ||
+      error?.message?.includes('connection') ||
+      error?.message?.includes('timeout')) {
+    return true;
+  }
+
+  // Supabase-specific errors
+  if (error?.code) {
+    // Temporary database errors (retry)
+    if (error.code === 'PGRST301' || // connection error
+        error.code === 'PGRST504' || // gateway timeout
+        error.code === '57P03' ||    // cannot connect now
+        error.code === '08006' ||    // connection failure
+        error.code === '08001') {    // unable to connect
+      return true;
+    }
+
+    // Permanent errors (don't retry)
+    if (error.code === 'PGRST116' ||  // not found
+        error.code === '23505' ||     // unique violation
+        error.code === '23503' ||     // foreign key violation
+        error.code === '23502' ||     // not null violation
+        error.code === '42P01') {     // undefined table
+      return false;
+    }
+  }
+
+  // Rate limit errors (temporary)
+  if (error?.status === 429 || error?.code === 'rate_limit_error') {
+    return true;
+  }
+
+  // Generic network errors (temporary)
+  if (error instanceof TypeError && error.message.includes('fetch')) {
+    return true;
+  }
+
+  // Validation errors (permanent)
+  if (error?.name === 'ValidationError' ||
+      error?.name === 'ZodError' ||
+      error?.message?.includes('Invalid') ||
+      error?.message?.includes('required')) {
+    return false;
+  }
+
+  // Default to non-retryable for safety (prevents infinite retries)
+  return false;
+}
+
 export async function POST(req: NextRequest) {
   console.log("🔗 Webhook hit");
+
+  // Apply rate limiting for webhooks (200 requests per minute)
+  const rateLimitResponse = applyRateLimit(req, 'WEBHOOK');
+  if (rateLimitResponse) return rateLimitResponse;
 
   // Validate environment variables
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -51,6 +116,22 @@ export async function POST(req: NextRequest) {
     return new Response("Invalid signature", { status: 400 });
   }
 
+  // SECURITY: Check for duplicate event processing (idempotency)
+  const supabase = createClient();
+  const { data: existingEvent } = await supabase
+    .from('webhook_events')
+    .select('id')
+    .eq('stripe_event_id', event.id)
+    .single();
+
+  if (existingEvent) {
+    console.log(`ℹ️ Event already processed: ${event.id}`);
+    return new Response(JSON.stringify({ received: true, duplicate: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   // Handle different event types
   try {
     switch (event.type) {
@@ -58,24 +139,50 @@ export async function POST(req: NextRequest) {
         await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session, stripe);
         console.log("✅ Checkout completion handled successfully");
         break;
-      
+
       case "payment_intent.succeeded":
         await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent);
         console.log("✅ Payment success handled successfully");
         break;
-      
+
       case "payment_intent.payment_failed":
         await handlePaymentFailed(event.data.object as Stripe.PaymentIntent);
         console.log("✅ Payment failure handled successfully");
         break;
-      
+
       default:
         console.log(`ℹ️ Unhandled event type: ${event.type}`);
         break;
     }
+
+    // Record successful processing
+    await supabase.from('webhook_events').insert({
+      stripe_event_id: event.id,
+      event_type: event.type,
+      processed_at: new Date().toISOString()
+    });
   } catch (error) {
     console.error(`❌ Error handling webhook event ${event.type}:`, error);
-    return new Response("Webhook processing failed", { status: 500 });
+
+    // Determine if error is retryable
+    const isRetryable = isRetryableError(error);
+
+    if (isRetryable) {
+      // Return 500 for temporary errors (DB connection, network) - Stripe will retry
+      console.warn(`⚠️ Retryable error occurred for event ${event.type} - Stripe will retry`);
+      return new Response("Temporary error - will retry", { status: 500 });
+    } else {
+      // Return 200 for permanent errors (bad data, validation) - stops retries
+      console.error(`❌ Permanent error occurred for event ${event.type} - stopping retries`);
+      return new Response(JSON.stringify({
+        received: true,
+        error: "Permanent error - event discarded",
+        event_id: event.id
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
   }
 
   // Always return 200 for valid webhooks
@@ -106,6 +213,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
   const platformFeeAmountCents = expandedSession.metadata?.platform_fee_amount_cents;
   const athleteServiceFee = expandedSession.metadata?.athlete_service_fee;
 
+  // Film review specific metadata
+  const bookingType = (expandedSession.metadata?.booking_type || 'live_lesson') as 'live_lesson' | 'film_review';
+  const filmUrl = expandedSession.metadata?.film_url || null;
+  const athleteNotes = expandedSession.metadata?.athlete_notes || null;
+  const turnaroundHours = expandedSession.metadata?.turnaround_hours ? parseInt(expandedSession.metadata.turnaround_hours) : 48;
+
   if (!listingId || !coachId) {
     console.error("⚠️ Missing required metadata:", {
       listing_id: listingId,
@@ -135,8 +248,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
     throw new Error("Missing payment intent ID");
   }
 
-  // Extract other required fields
-  const customerEmail = expandedSession.customer_details?.email;
+  // Extract and validate email
+  const emailSchema = z.string().email();
+  let customerEmail: string | null = null;
+
+  try {
+    customerEmail = emailSchema.parse(expandedSession.customer_details?.email);
+  } catch (emailError) {
+    console.error("⚠️ Invalid email from Stripe:", expandedSession.customer_details?.email);
+    // Continue without email - booking will still be created but email sending may fail
+  }
+
   const amountPaidCents = expandedSession.amount_total; // Already in cents
   const stripeSessionId = expandedSession.id;
 
@@ -147,19 +269,21 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
     customer_email: customerEmail,
     amount_paid_cents: amountPaidCents,
     status: 'paid',
-    stripe_session_id: stripeSessionId
+    stripe_session_id: stripeSessionId,
+    booking_type: bookingType,
+    film_url: bookingType === 'film_review' ? '[HIDDEN]' : null
   });
 
   // Verify application fee amount if commission settings were applied
   if (isCommissionSettingsApplied && platformFeeAmountCents) {
     try {
-      const paymentIntentObj = typeof expandedSession.payment_intent === 'string' 
+      const paymentIntentObj = typeof expandedSession.payment_intent === 'string'
         ? await stripe.paymentIntents.retrieve(expandedSession.payment_intent)
         : expandedSession.payment_intent;
-      
+
       const actualApplicationFee = paymentIntentObj?.application_fee_amount;
       const expectedApplicationFee = parseInt(platformFeeAmountCents, 10);
-      
+
       if (actualApplicationFee !== expectedApplicationFee) {
         console.warn("⚠️ Application fee mismatch:", {
           expected: expectedApplicationFee,
@@ -180,31 +304,41 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
   // Create server-side Supabase client
   const supabase = createClient();
 
+  // Build booking data based on type
+  const bookingData: Record<string, any> = {
+    payment_intent_id: paymentIntentId,
+    listing_id: listingId,
+    coach_id: coachId,
+    customer_email: customerEmail,
+    amount_paid_cents: amountPaidCents,
+    status: 'paid',
+    stripe_session_id: stripeSessionId,
+    booking_type: bookingType
+  };
+
+  // Add film review specific fields
+  if (bookingType === 'film_review') {
+    bookingData.film_url = filmUrl;
+    bookingData.athlete_notes = athleteNotes;
+    bookingData.review_status = 'pending_acceptance';
+    // Deadline will be set when coach accepts (turnaround_hours from acceptance time)
+    // For now, store the expected deadline as 24hrs from now for coach to accept
+    console.log(`🎬 Film review booking created - Coach has 24hrs to accept, then ${turnaroundHours}hrs to deliver`);
+  }
+
   // Upsert booking record using payment_intent_id for idempotency
   const { data: booking, error: dbError } = await supabase
     .from("bookings")
-    .upsert({
-      payment_intent_id: paymentIntentId,
-      listing_id: listingId,
-      coach_id: coachId,
-      customer_email: customerEmail,
-      amount_paid_cents: amountPaidCents,
-      status: 'paid',
-      stripe_session_id: stripeSessionId
-    }, {
+    .upsert(bookingData, {
       onConflict: 'payment_intent_id'
     })
-    .select('id, payment_intent_id')
+    .select('id, payment_intent_id, booking_type')
     .single();
 
   if (dbError) {
-    console.error("❌ Supabase upsert error:", {
-      error: dbError.message,
-      code: dbError.code,
-      details: dbError.details,
-      hint: dbError.hint
-    });
-    throw new Error(`Database upsert failed: ${dbError.message}`);
+    const sanitized = sanitizeDBError(dbError, 'Stripe webhook - booking upsert');
+    logError('Stripe webhook - booking upsert', sanitized.logDetails);
+    throw new Error(sanitized.message);
   }
 
   console.log("✅ Booking created/updated successfully:", {
@@ -213,7 +347,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
     listing_id: listingId,
     coach_id: coachId,
     amount_paid_cents: amountPaidCents,
-    stripe_session_id: stripeSessionId
+    stripe_session_id: stripeSessionId,
+    booking_type: booking.booking_type
   });
 
   // Send booking confirmation emails (fire-and-forget)

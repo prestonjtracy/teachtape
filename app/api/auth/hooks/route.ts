@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createHmac } from 'crypto'
 
 /**
  * Supabase Auth Webhook Handler
@@ -14,34 +15,56 @@ import { createClient } from '@/lib/supabase/server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Validate webhook signature (optional but recommended)
-function validateWebhookSignature(request: NextRequest): boolean {
-  const signature = request.headers.get('x-supabase-signature')
-  const webhookSecret = process.env.SUPABASE_WEBHOOK_SECRET
-
-  // If no secret configured, skip validation (for testing)
+// Validate webhook signature using HMAC
+async function validateWebhookSignature(
+  signature: string | null,
+  rawBody: string,
+  webhookSecret: string | undefined
+): Promise<boolean> {
+  // If no secret configured, skip validation (for testing only)
   if (!webhookSecret) {
     console.warn('⚠️ SUPABASE_WEBHOOK_SECRET not set - webhook signature validation disabled')
     return true
   }
 
-  // TODO: Implement proper HMAC signature validation if needed
-  // For now, just check if signature exists
-  return !!signature
+  if (!signature) {
+    console.error('❌ Missing x-supabase-signature header')
+    return false
+  }
+
+  try {
+    // Calculate HMAC signature
+    const hmac = createHmac('sha256', webhookSecret)
+    hmac.update(rawBody)
+    const calculatedSignature = hmac.digest('hex')
+
+    // Compare signatures (timing-safe comparison)
+    return signature === calculatedSignature
+  } catch (error) {
+    console.error('❌ Error validating webhook signature:', error)
+    return false
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
     console.log('🔔 [Auth Hook] Received webhook from Supabase')
 
+    // Get signature header
+    const signature = request.headers.get('x-supabase-signature')
+    const webhookSecret = process.env.SUPABASE_WEBHOOK_SECRET
+
+    // Read body as text first for signature validation
+    const rawBody = await request.text()
+
     // Validate webhook signature
-    if (!validateWebhookSignature(request)) {
+    if (!await validateWebhookSignature(signature, rawBody, webhookSecret)) {
       console.error('❌ [Auth Hook] Invalid webhook signature')
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }
 
-    // Parse webhook payload
-    const payload = await request.json()
+    // Parse webhook payload from raw body
+    const payload = JSON.parse(rawBody)
     console.log('📦 [Auth Hook] Payload:', JSON.stringify(payload, null, 2))
 
     // Extract event type and user data

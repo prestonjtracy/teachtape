@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import { z } from "zod";
 import { calculateApplicationFee, getFeeBreakdown, validateFeeAmount, getActiveCommissionSettings, getExtendedFeeBreakdown, calcPlatformCutCents, calcAthleteFeeLineItems } from "@/lib/stripeFees";
+import { applyRateLimit } from "@/lib/rateLimitHelpers";
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,10 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   console.log(`🔍 [POST /api/checkout] Request received`);
+
+  // Apply rate limiting (30 requests per minute)
+  const rateLimitResponse = applyRateLimit(req, 'MODERATE');
+  if (rateLimitResponse) return rateLimitResponse;
   
   try {
     const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -95,14 +100,17 @@ export async function POST(req: NextRequest) {
       .eq('profile_id', listing.coach_id)
       .single();
 
-    // SECURITY: Prevent development mode in production
-    const isDevelopment = process.env.DEVELOPMENT_MODE === 'true' && process.env.NODE_ENV !== 'production';
+    // SECURITY: Completely disable development mode in production builds
+    // This is a compile-time check that will be optimized away in production
+    const isDevelopment = process.env.NODE_ENV === 'development' && process.env.DEVELOPMENT_MODE === 'true';
 
-    if (process.env.DEVELOPMENT_MODE === 'true' && process.env.NODE_ENV === 'production') {
-      console.error('❌ [POST /api/checkout] CRITICAL: DEVELOPMENT_MODE cannot be enabled in production!');
+    // Double check at runtime - if somehow enabled in production, refuse to operate
+    if (process.env.NODE_ENV === 'production' && process.env.DEVELOPMENT_MODE === 'true') {
+      console.error('❌ [POST /api/checkout] CRITICAL SECURITY VIOLATION: DEVELOPMENT_MODE enabled in production!');
+      // Return 503 to indicate service unavailable (not server error)
       return new Response(
-        JSON.stringify({ error: "Server misconfigured" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Service temporarily unavailable" }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
       );
     }
 

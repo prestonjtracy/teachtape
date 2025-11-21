@@ -1,6 +1,7 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { logAdminAction, AuditActions, getTargetIdentifier } from '@/lib/auditLog'
+import { logAdminAction, AuditActions } from '@/lib/auditLog'
+import { requireAdmin } from '@/lib/auth/server'
 
 export const dynamic = 'force-dynamic';
 
@@ -9,23 +10,13 @@ export async function POST(request: NextRequest) {
     const { coachId, action } = await request.json()
 
     // Verify admin access
+    const { user, error } = await requireAdmin()
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+
     const supabase = createClient()
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check if user is admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, role')
-      .eq('auth_user_id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const profile = user.profile!
 
     // SECURITY: Validate that coach exists before performing any action (IDOR protection)
     const { data: coachExists, error: checkError } = await supabase
@@ -38,8 +29,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Coach not found' }, { status: 404 })
     }
 
-    const adminSupabase = createAdminClient()
-
     switch (action) {
       case 'verify':
         // Get coach info for audit log
@@ -50,7 +39,11 @@ export async function POST(request: NextRequest) {
           .single()
         
         // Mark coach as verified
-        const verifyUpdate: any = {
+        const verifyUpdate: {
+          is_public: boolean;
+          verified_at: string;
+          verified_by: string;
+        } = {
           is_public: true,
           verified_at: new Date().toISOString(),
           verified_by: profile.id  // Use profile ID instead of auth user ID

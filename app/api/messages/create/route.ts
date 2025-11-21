@@ -1,17 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClientForApiRoute } from "@/lib/supabase/server";
 import { z } from "zod";
+import { applyRateLimit } from "@/lib/rateLimitHelpers";
+import { sanitizeText } from "@/lib/sanitization";
 
 export const dynamic = 'force-dynamic';
 
 const CreateMessageSchema = z.object({
   conversation_id: z.string().uuid("Invalid conversation ID"),
-  body: z.string().min(1, "Message body is required").max(2000, "Message too long"),
+  body: z.string()
+    .min(1, "Message body is required")
+    .max(2000, "Message too long")
+    .transform(val => sanitizeText(val)), // XSS protection
   kind: z.string().default("text"),
 });
 
 export async function POST(req: NextRequest) {
   console.log('🔍 [POST /api/messages/create] Request received');
+
+  // Apply rate limiting (30 requests per minute to prevent spam)
+  const rateLimitResponse = applyRateLimit(req, 'MODERATE');
+  if (rateLimitResponse) return rateLimitResponse;
   
   try {
     const body = await req.json();

@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logAdminAction, AuditActions, getTargetIdentifier } from '@/lib/auditLog'
+import { requireAdmin } from '@/lib/auth/server'
 import Stripe from 'stripe'
 
 export const dynamic = 'force-dynamic';
@@ -8,29 +9,18 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest) {
   try {
     const { paymentId, action } = await request.json()
-    
+
     if (!paymentId || !action) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
     }
-    
+
     // Verify admin access
+    const { user, error } = await requireAdmin()
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+
     const supabase = createClient()
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check if user is admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('auth_user_id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     // Initialize Stripe
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY
@@ -186,22 +176,12 @@ async function retryPayout(supabase: any, stripe: Stripe, paymentId: string, adm
 export async function GET(request: NextRequest) {
   try {
     // Verify admin access
+    const { user, error } = await requireAdmin()
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+
     const supabase = createClient()
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('auth_user_id', user.id)
-      .single()
-
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
 
     // Initialize Stripe
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY

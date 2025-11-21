@@ -3,6 +3,7 @@ import { createClientForApiRoute, createAdminClient } from "@/lib/supabase/serve
 import Stripe from "stripe";
 import { z } from "zod";
 import { sendBookingRequestEmails } from "@/lib/email";
+import { applyRateLimit } from "@/lib/rateLimitHelpers";
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,10 @@ const CreateBookingRequestSchema = z.object({
 
 export async function POST(req: NextRequest) {
   console.log('🔍 [POST /api/requests/create] Request received');
+
+  // Apply rate limiting (30 requests per minute)
+  const rateLimitResponse = applyRateLimit(req, 'MODERATE');
+  if (rateLimitResponse) return rateLimitResponse;
   
   try {
     const secretKey = process.env.STRIPE_SECRET_KEY;
