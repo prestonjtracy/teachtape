@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createHmac } from 'crypto'
 
+// Force Node.js runtime for webhook handling (needed for crypto)
+export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
@@ -10,6 +12,17 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(req: NextRequest) {
   console.log('📥 [Zoom Webhook] POST request received')
+
+  // Get webhook secret early - needed for both validation and signature verification
+  const webhookSecret = process.env.ZOOM_WEBHOOK_SECRET_TOKEN
+
+  if (!webhookSecret) {
+    console.error('❌ [Zoom Webhook] ZOOM_WEBHOOK_SECRET_TOKEN not configured')
+    return NextResponse.json(
+      { error: 'Webhook not configured' },
+      { status: 500 }
+    )
+  }
 
   try {
     // Get raw body for signature verification
@@ -24,26 +37,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
 
-    // Handle Zoom endpoint validation
+    // Handle Zoom endpoint validation (URL verification challenge)
+    // https://developers.zoom.us/docs/api/rest/webhook-reference/#validate-your-webhook-endpoint
     if (body.event === 'endpoint.url_validation') {
-      const token = body.payload?.plainToken
-      console.log('🔐 [Zoom Webhook] Endpoint validation')
+      const plainToken = body.payload?.plainToken
+
+      if (!plainToken) {
+        console.error('❌ [Zoom Webhook] Missing plainToken in validation request')
+        return NextResponse.json({ error: 'Missing plainToken' }, { status: 400 })
+      }
+
+      // Create HMAC SHA256 hash of plainToken using webhook secret
+      const encryptedToken = createHmac('sha256', webhookSecret)
+        .update(plainToken)
+        .digest('hex')
+
+      console.log('🔐 [Zoom Webhook] Endpoint validation - responding with encrypted token')
+
       return NextResponse.json({
-        plainToken: token,
-        encryptedToken: token
+        plainToken: plainToken,
+        encryptedToken: encryptedToken
       })
     }
 
-    // Verify webhook signature
-    const webhookSecret = process.env.ZOOM_WEBHOOK_SECRET
-    if (!webhookSecret) {
-      console.error('❌ [Zoom Webhook] ZOOM_WEBHOOK_SECRET not configured')
-      return NextResponse.json(
-        { error: 'Webhook not configured' },
-        { status: 500 }
-      )
-    }
-
+    // Verify webhook signature for all other events
     const timestamp = req.headers.get('x-zm-request-timestamp')
     const signature = req.headers.get('x-zm-signature')
 
