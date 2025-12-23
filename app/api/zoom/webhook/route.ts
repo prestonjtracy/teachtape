@@ -42,6 +42,12 @@ export async function POST(req: NextRequest) {
     if (body.event === 'endpoint.url_validation') {
       const plainToken = body.payload?.plainToken
 
+      // Detailed logging for debugging
+      console.log('🔐 [Zoom Webhook] URL Validation Request:')
+      console.log('  Raw body:', rawBody)
+      console.log('  plainToken received:', plainToken)
+      console.log('  webhookSecret (first 4 chars):', webhookSecret.substring(0, 4) + '...')
+
       if (!plainToken) {
         console.error('❌ [Zoom Webhook] Missing plainToken in validation request')
         return NextResponse.json({ error: 'Missing plainToken' }, { status: 400 })
@@ -52,7 +58,8 @@ export async function POST(req: NextRequest) {
         .update(plainToken)
         .digest('hex')
 
-      console.log('🔐 [Zoom Webhook] Endpoint validation - responding with encrypted token')
+      console.log('  encryptedToken generated:', encryptedToken)
+      console.log('  Response:', JSON.stringify({ plainToken, encryptedToken }))
 
       return NextResponse.json({
         plainToken: plainToken,
