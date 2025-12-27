@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createHmac } from 'crypto'
 
 // Force Node.js runtime for webhook handling (needed for crypto)
+// Endpoint: POST /api/zoom/webhook
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
