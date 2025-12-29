@@ -153,23 +153,47 @@ async function logWebhookEvent(
   eventType: string,
   payload: any
 ) {
-  if (!meetingId) return
+  if (!meetingId) {
+    console.warn(`⚠️ [Zoom Webhook] No meetingId for ${eventType} event`)
+    return
+  }
 
-  const { data: booking } = await supabase
-    .from('bookings')
-    .select('id')
-    .eq('zoom_meeting_id', meetingId)
-    .single()
+  try {
+    // Look up associated booking
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('zoom_meeting_id', meetingId)
+      .single()
 
-  await supabase.from('zoom_webhook_events').insert({
-    zoom_meeting_id: meetingId,
-    booking_id: booking?.id || null,
-    event_type: eventType,
-    occurred_at: new Date(
-      payload?.object?.start_time || payload?.object?.end_time || Date.now()
-    ).toISOString(),
-    raw_data: payload
-  })
+    if (bookingError && bookingError.code !== 'PGRST116') {
+      console.warn(`⚠️ [Zoom Webhook] Error finding booking: ${bookingError.message}`)
+    }
+
+    // Extract timestamp from Zoom payload
+    // The 'payload' param is the full webhook body: { event, payload: { object: {...} } }
+    // So we access payload.payload.object for the meeting data
+    const zoomObject = payload?.payload?.object
+    const occurredAt = zoomObject?.start_time || zoomObject?.end_time || new Date().toISOString()
+
+    console.log(`📝 [Zoom Webhook] ${eventType} - Meeting ID: ${meetingId}, Time: ${occurredAt}`)
+
+    const { error: insertError } = await supabase.from('zoom_webhook_events').insert({
+      zoom_meeting_id: meetingId,
+      booking_id: booking?.id || null,
+      event_type: eventType,
+      occurred_at: occurredAt,
+      raw_data: payload
+    })
+
+    if (insertError) {
+      console.error(`❌ [Zoom Webhook] Failed to insert ${eventType} event:`, insertError.message)
+    } else {
+      console.log(`✅ [Zoom Webhook] Logged ${eventType} event for meeting ${meetingId}`)
+    }
+  } catch (error) {
+    console.error(`❌ [Zoom Webhook] Error in logWebhookEvent:`, error)
+  }
 }
 
 async function logParticipantEvent(
@@ -178,44 +202,88 @@ async function logParticipantEvent(
   action: 'joined' | 'left',
   payload: any
 ) {
-  if (!meetingId) return
+  if (!meetingId) {
+    console.warn(`⚠️ [Zoom Webhook] No meetingId for participant ${action} event`)
+    return
+  }
 
-  const participant = payload?.object?.participant
-  const { data: booking } = await supabase
-    .from('bookings')
-    .select('id')
-    .eq('zoom_meeting_id', meetingId)
-    .single()
+  try {
+    // Zoom payload structure: payload.payload.object.participant
+    const zoomObject = payload?.payload?.object
+    const participant = zoomObject?.participant
 
-  await supabase.from('zoom_webhook_events').insert({
-    zoom_meeting_id: meetingId,
-    booking_id: booking?.id || null,
-    event_type: `meeting.participant_${action}`,
-    participant_name: participant?.user_name,
-    participant_email: participant?.email,
-    participant_user_id: participant?.user_id,
-    occurred_at: new Date(
-      participant?.join_time || participant?.leave_time || Date.now()
-    ).toISOString(),
-    raw_data: payload
-  })
+    // Look up associated booking
+    const { data: booking, error: bookingError } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('zoom_meeting_id', meetingId)
+      .single()
+
+    if (bookingError && bookingError.code !== 'PGRST116') {
+      console.warn(`⚠️ [Zoom Webhook] Error finding booking: ${bookingError.message}`)
+    }
+
+    // Extract timestamp - Zoom uses join_time for joined, leave_time for left
+    const occurredAt = participant?.join_time || participant?.leave_time || new Date().toISOString()
+
+    const { error: insertError } = await supabase.from('zoom_webhook_events').insert({
+      zoom_meeting_id: meetingId,
+      booking_id: booking?.id || null,
+      event_type: `meeting.participant_${action}`,
+      participant_name: participant?.user_name,
+      participant_email: participant?.email,
+      participant_user_id: participant?.user_id,
+      occurred_at: occurredAt,
+      raw_data: payload
+    })
+
+    if (insertError) {
+      console.error(`❌ [Zoom Webhook] Failed to insert participant ${action} event:`, insertError.message)
+    } else {
+      console.log(`✅ [Zoom Webhook] Logged participant ${action} for meeting ${meetingId}: ${participant?.user_name || 'unknown'}`)
+    }
+  } catch (error) {
+    console.error(`❌ [Zoom Webhook] Error in logParticipantEvent:`, error)
+  }
 }
 
 async function markBookingCompleted(supabase: any, meetingId: string | undefined) {
-  if (!meetingId) return
+  if (!meetingId) {
+    console.warn('⚠️ [Zoom Webhook] No meetingId for markBookingCompleted')
+    return
+  }
 
-  const { data: booking } = await supabase
-    .from('bookings')
-    .select('id, status')
-    .eq('zoom_meeting_id', meetingId)
-    .single()
-
-  if (booking && booking.status === 'paid') {
-    await supabase
+  try {
+    const { data: booking, error: findError } = await supabase
       .from('bookings')
-      .update({ status: 'completed' })
-      .eq('id', booking.id)
-    console.log(`✅ [Zoom Webhook] Booking ${booking.id} marked as completed`)
+      .select('id, status')
+      .eq('zoom_meeting_id', meetingId)
+      .single()
+
+    if (findError) {
+      if (findError.code === 'PGRST116') {
+        console.log(`ℹ️ [Zoom Webhook] No booking found for meeting ${meetingId}`)
+      } else {
+        console.error(`❌ [Zoom Webhook] Error finding booking: ${findError.message}`)
+      }
+      return
+    }
+
+    if (booking && booking.status === 'paid') {
+      const { error: updateError } = await supabase
+        .from('bookings')
+        .update({ status: 'completed' })
+        .eq('id', booking.id)
+
+      if (updateError) {
+        console.error(`❌ [Zoom Webhook] Failed to update booking status: ${updateError.message}`)
+      } else {
+        console.log(`✅ [Zoom Webhook] Booking ${booking.id} marked as completed`)
+      }
+    } else if (booking) {
+      console.log(`ℹ️ [Zoom Webhook] Booking ${booking.id} status is '${booking.status}', not updating`)
+    }
+  } catch (error) {
+    console.error(`❌ [Zoom Webhook] Error in markBookingCompleted:`, error)
   }
 }
-// Sat Dec 27 15:19:59 CST 2025
