@@ -157,9 +157,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Send email notification to athlete (fire-and-forget)
     try {
       // Note: These are single objects from .single() query, not arrays
-      const athleteData = bookingRequest.athlete as { id: string; full_name: string | null; auth_user_id: string } | null;
-      const coachData = bookingRequest.coach as { id: string; full_name: string | null } | null;
-      const listingData = bookingRequest.listing as { id: string; title: string; price_cents: number } | null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const athleteData = (bookingRequest as any).athlete as { id: string; full_name: string | null; auth_user_id: string } | null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const coachData = (bookingRequest as any).coach as { id: string; full_name: string | null } | null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const listingData = (bookingRequest as any).listing as { id: string; title: string; price_cents: number } | null;
 
       if (!athleteData?.auth_user_id) {
         console.warn('⚠️ Missing athlete auth_user_id for request:', requestId);
