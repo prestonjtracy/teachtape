@@ -320,6 +320,29 @@ async function markBookingCompleted(supabase: any, meetingId: string | undefined
         console.error(`❌ [Zoom Webhook] Failed to update booking status: ${updateError.message}`)
       } else {
         console.log(`✅ [Zoom Webhook] Booking ${booking.id} marked as completed (${actualCount} participants verified)`)
+
+        // Record payout event for completed session
+        const { data: fullBooking } = await supabase
+          .from('bookings')
+          .select('coach_id, amount_paid_cents')
+          .eq('id', booking.id)
+          .single()
+
+        if (fullBooking) {
+          const { error: payoutError } = await supabase.from('payout_events').insert({
+            booking_id: booking.id,
+            coach_id: fullBooking.coach_id,
+            event_type: 'session_completed',
+            amount_cents: fullBooking.amount_paid_cents,
+            status: 'pending'
+          })
+
+          if (payoutError) {
+            console.warn(`⚠️ [Zoom Webhook] Failed to record payout event: ${payoutError.message}`)
+          } else {
+            console.log(`✅ [Zoom Webhook] Payout event recorded for booking ${booking.id}`)
+          }
+        }
       }
     } else if (booking) {
       console.log(`ℹ️ [Zoom Webhook] Booking ${booking.id} status is '${booking.status}', not updating`)

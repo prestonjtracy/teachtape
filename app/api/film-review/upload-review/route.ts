@@ -165,6 +165,26 @@ export async function POST(req: NextRequest) {
       console.error(`⚠️ [POST /api/film-review/upload-review] Failed to send email:`, emailError);
     }
 
+    // Record payout event for tracking
+    try {
+      const { error: payoutError } = await supabase.from('payout_events').insert({
+        booking_id: bookingId,
+        coach_id: profile.id,
+        event_type: 'film_review_completed',
+        amount_cents: booking.amount_paid_cents,
+        status: 'pending'
+      });
+
+      if (payoutError) {
+        // Log but don't fail - payout tracking is secondary to review completion
+        console.warn(`⚠️ [POST /api/film-review/upload-review] Failed to record payout event:`, payoutError.message);
+      } else {
+        console.log(`✅ [POST /api/film-review/upload-review] Payout event recorded`);
+      }
+    } catch (payoutErr) {
+      console.warn(`⚠️ [POST /api/film-review/upload-review] Payout event error:`, payoutErr);
+    }
+
     console.log(`✅ [POST /api/film-review/upload-review] Successfully completed review for booking ${bookingId}`);
 
     return new Response(
