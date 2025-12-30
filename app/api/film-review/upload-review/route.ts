@@ -92,6 +92,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check if the review is being uploaded past the deadline
+    const turnaroundHours = booking.listing?.turnaround_hours || 48;
+    const acceptedAt = new Date(booking.review_accepted_at || booking.created_at);
+    const deadline = new Date(acceptedAt.getTime() + turnaroundHours * 60 * 60 * 1000);
+    const now = new Date();
+    const isLate = now > deadline;
+
+    if (isLate) {
+      const hoursLate = Math.round((now.getTime() - deadline.getTime()) / (1000 * 60 * 60));
+      console.warn(`⚠️ [POST /api/film-review/upload-review] Late submission: ${hoursLate} hours past deadline`);
+      // Allow submission but flag it - could be used for future refund policies
+      // For now, just log it. Business decision needed on whether to block late submissions.
+    }
+
     console.log(`✅ [POST /api/film-review/upload-review] Uploading review:`, {
       bookingId,
       reviewDocumentUrl: '[HIDDEN]',
@@ -99,13 +113,21 @@ export async function POST(req: NextRequest) {
     });
 
     // Update booking with review document
+    const updateData: Record<string, any> = {
+      review_document_url: reviewDocumentUrl,
+      review_status: "completed",
+      review_completed_at: new Date().toISOString()
+    };
+
+    // Track if submission was late for potential refund policies
+    if (isLate) {
+      updateData.review_submitted_late = true;
+      updateData.review_hours_late = Math.round((now.getTime() - deadline.getTime()) / (1000 * 60 * 60));
+    }
+
     const { error: updateError } = await supabase
       .from("bookings")
-      .update({
-        review_document_url: reviewDocumentUrl,
-        review_status: "completed",
-        review_completed_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq("id", bookingId)
       .eq("review_status", "accepted");
 
@@ -153,8 +175,27 @@ export async function POST(req: NextRequest) {
 
     console.log(`✅ [POST /api/film-review/upload-review] Successfully completed review for booking ${bookingId}`);
 
-    // Note: Payment release happens automatically through Stripe Connect
-    // The coach receives funds based on their payout schedule
+    // Record the payout event for tracking
+    // Note: Actual payment was already captured at checkout via Stripe Connect
+    // This records when the review was completed so we can track coach fulfillment
+    try {
+      await supabase.from('payout_events').insert({
+        booking_id: bookingId,
+        coach_id: profile.id,
+        event_type: 'film_review_completed',
+        amount_cents: booking.amount_paid_cents,
+        status: 'pending_payout', // Stripe handles actual payout on their schedule
+        metadata: {
+          review_completed_at: new Date().toISOString(),
+          was_late: isLate,
+          hours_late: isLate ? Math.round((now.getTime() - deadline.getTime()) / (1000 * 60 * 60)) : 0
+        }
+      });
+      console.log(`✅ [POST /api/film-review/upload-review] Payout event recorded for booking ${bookingId}`);
+    } catch (payoutError) {
+      // Log but don't fail - the review is still complete
+      console.warn(`⚠️ [POST /api/film-review/upload-review] Failed to record payout event:`, payoutError);
+    }
 
     return new Response(
       JSON.stringify({

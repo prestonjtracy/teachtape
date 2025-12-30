@@ -277,6 +277,40 @@ async function markBookingCompleted(supabase: any, meetingId: string | undefined
     }
 
     if (booking && booking.status === 'paid') {
+      // Verify that at least 2 participants joined before marking as completed
+      // This prevents coaches from being paid for sessions that didn't happen
+      const { count: participantCount, error: countError } = await supabase
+        .from('zoom_webhook_events')
+        .select('*', { count: 'exact', head: true })
+        .eq('zoom_meeting_id', meetingId)
+        .eq('event_type', 'meeting.participant_joined')
+
+      if (countError) {
+        console.warn(`⚠️ [Zoom Webhook] Could not verify attendance: ${countError.message}`)
+        // Continue with completion but log the issue
+      }
+
+      const actualCount = participantCount || 0
+      if (actualCount < 2) {
+        console.warn(`⚠️ [Zoom Webhook] Meeting ${meetingId} ended with only ${actualCount} participant(s) - not marking as completed`)
+        // Update booking to flag it for review instead of completing
+        const { error: flagError } = await supabase
+          .from('bookings')
+          .update({
+            status: 'needs_review',
+            review_notes: `Meeting ended with only ${actualCount} participant(s). Manual review required.`
+          })
+          .eq('id', booking.id)
+          .eq('status', 'paid') // Only update if still paid
+
+        if (flagError) {
+          console.error(`❌ [Zoom Webhook] Failed to flag booking for review: ${flagError.message}`)
+        } else {
+          console.log(`⚠️ [Zoom Webhook] Booking ${booking.id} flagged for review due to low attendance`)
+        }
+        return
+      }
+
       const { error: updateError } = await supabase
         .from('bookings')
         .update({ status: 'completed' })
@@ -285,7 +319,7 @@ async function markBookingCompleted(supabase: any, meetingId: string | undefined
       if (updateError) {
         console.error(`❌ [Zoom Webhook] Failed to update booking status: ${updateError.message}`)
       } else {
-        console.log(`✅ [Zoom Webhook] Booking ${booking.id} marked as completed`)
+        console.log(`✅ [Zoom Webhook] Booking ${booking.id} marked as completed (${actualCount} participants verified)`)
       }
     } else if (booking) {
       console.log(`ℹ️ [Zoom Webhook] Booking ${booking.id} status is '${booking.status}', not updating`)
