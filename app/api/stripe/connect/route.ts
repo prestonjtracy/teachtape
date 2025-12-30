@@ -147,7 +147,7 @@ export async function POST(request: Request) {
 
     // Create Stripe account if it doesn't exist
     if (!stripeAccountId) {
-      const account = await stripe.accounts.create({ 
+      const account = await stripe.accounts.create({
         type: "express",
         country: 'US', // You might want to make this configurable
         capabilities: {
@@ -155,27 +155,60 @@ export async function POST(request: Request) {
           transfers: { requested: true }
         }
       });
-      
+
       stripeAccountId = account.id;
 
-      // Store the account ID in the coaches table
-      const { error: updateError } = await supabase
+      // Store the account ID in the coaches table using conditional update
+      // to prevent race condition where two requests create separate accounts
+      const { data: updateResult, error: updateError } = await supabase
         .from('coaches')
         .update({ stripe_account_id: stripeAccountId })
-        .eq('id', coach!.id);
+        .eq('id', coach!.id)
+        .is('stripe_account_id', null) // Only update if no account exists yet
+        .select('stripe_account_id')
+        .single();
 
       if (updateError) {
-        console.error('Failed to store Stripe account ID:', updateError);
-        return new Response(
-          JSON.stringify({ error: "Failed to store Stripe account" }),
-          {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      }
+        // Check if this is a race condition (another request already set the account)
+        if (updateError.code === 'PGRST116') {
+          // No row was updated - another request beat us to it
+          // Fetch the existing account instead
+          const { data: existingCoach } = await supabase
+            .from('coaches')
+            .select('stripe_account_id')
+            .eq('id', coach!.id)
+            .single();
 
-      console.log('Created and stored new Stripe account:', stripeAccountId);
+          if (existingCoach?.stripe_account_id) {
+            console.log('Race condition detected - using existing Stripe account:', existingCoach.stripe_account_id);
+            stripeAccountId = existingCoach.stripe_account_id;
+            // Clean up the orphaned account we just created (fire-and-forget)
+            stripe.accounts.del(account.id).catch(err =>
+              console.warn('Failed to clean up orphaned Stripe account:', err)
+            );
+          } else {
+            console.error('Failed to store Stripe account ID:', updateError);
+            return new Response(
+              JSON.stringify({ error: "Failed to store Stripe account" }),
+              {
+                status: 500,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          }
+        } else {
+          console.error('Failed to store Stripe account ID:', updateError);
+          return new Response(
+            JSON.stringify({ error: "Failed to store Stripe account" }),
+            {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+      } else {
+        console.log('Created and stored new Stripe account:', stripeAccountId);
+      }
     }
 
     // Check if account setup is complete

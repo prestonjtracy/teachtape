@@ -3,7 +3,7 @@ import { createClientForApiRoute, createAdminClient } from "@/lib/supabase/serve
 import Stripe from "stripe";
 import { z } from "zod";
 import { sendBookingRequestEmails } from "@/lib/email";
-import { createMeeting } from "@/lib/zoom/api";
+import { createMeeting, deleteMeeting } from "@/lib/zoom/api";
 
 export const dynamic = 'force-dynamic';
 
@@ -148,6 +148,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const coachStripeAccountId = coachData.stripe_account_id;
 
+    // Verify Stripe account has charges_enabled before processing payment
+    const coachStripeAccount = await stripe.accounts.retrieve(coachStripeAccountId);
+    if (!coachStripeAccount.charges_enabled) {
+      console.error('❌ [POST /api/requests/accept] Coach Stripe account not ready for payments:', {
+        accountId: coachStripeAccountId,
+        chargesEnabled: coachStripeAccount.charges_enabled,
+        payoutsEnabled: coachStripeAccount.payouts_enabled
+      });
+      return NextResponse.json(
+        { error: "Coach payment setup incomplete. Please ask the coach to complete their Stripe onboarding." },
+        { status: 400 }
+      );
+    }
+
+    console.log('✅ [POST /api/requests/accept] Coach Stripe account verified:', {
+      accountId: coachStripeAccountId,
+      chargesEnabled: coachStripeAccount.charges_enabled
+    });
+
     // Calculate application fee using commission settings
     const listingPrice = bookingRequest.listing.price_cents;
     
@@ -221,6 +240,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // Create PaymentIntent with Stripe Connect
+    // Use requestId as idempotency key to prevent duplicate charges on retries
     let paymentIntent: Stripe.PaymentIntent;
     try {
       paymentIntent = await stripe.paymentIntents.create({
@@ -245,6 +265,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           customer_id: customerId,
         },
         description: `TeachTape: ${bookingRequest.listing.title}`,
+      }, {
+        idempotencyKey: `accept-booking-${requestId}`, // Prevent duplicate payments on retry
       });
 
       console.log('✅ [POST /api/requests/accept] Connect PaymentIntent created:', paymentIntent.id);
@@ -367,9 +389,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       console.log('✅ [POST /api/requests/accept] Zoom meeting created:', meetingDetails.id);
     } catch (zoomError) {
       console.error('❌ [POST /api/requests/accept] Zoom meeting creation failed:', zoomError);
-      // Don't fail the booking if Zoom fails - just log the error
-      // The booking will be created without Zoom links
+      // Don't fail the booking if Zoom fails - booking will be created without Zoom links
+      // User will be notified in the system message to schedule manually
     }
+
+    // Track if Zoom failed so we can notify user
+    const zoomFailed = !zoomJoinUrl;
 
     // Create booking record using admin client to bypass RLS
     const adminClient = createAdminClient();
@@ -409,6 +434,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           stripe_session_id: paymentIntent.id,
         }
       });
+
+      // Clean up Zoom meeting if booking creation failed
+      if (zoomMeetingId) {
+        try {
+          await deleteMeeting(zoomMeetingId);
+          console.log('🧹 [POST /api/requests/accept] Cleaned up Zoom meeting after booking failure:', zoomMeetingId);
+        } catch (cleanupError) {
+          console.error('⚠️ [POST /api/requests/accept] Failed to clean up Zoom meeting:', cleanupError);
+        }
+      }
+
       return NextResponse.json(
         { error: "Failed to create booking" },
         { status: 500 }
@@ -459,8 +495,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Create a fallback message for systems that don't support the new format
     let systemMessage = "✅ Booking accepted! Payment processed successfully.";
-    
-    // Add Zoom meeting info if available
+
+    // Add Zoom meeting info if available, or notify about manual scheduling
     if (zoomJoinUrl) {
       const sessionDate = new Date(bookingRequest.proposed_start).toLocaleString('en-US', {
         weekday: 'long',
@@ -479,6 +515,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       });
 
       systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate} - ${sessionEndTime}\n\n**For Athlete:** [🎥 Join Meeting](${zoomJoinUrl})\n\n**For Coach:** [🎥 Start Meeting](${zoomStartUrl})`;
+    } else if (zoomFailed) {
+      // Notify users that Zoom meeting couldn't be created automatically
+      systemMessage += `\n\n⚠️ **Note:** Automatic Zoom meeting creation failed. Please coordinate directly to schedule your session.`;
     }
 
     console.log('📝 [POST /api/requests/accept] System message content:', systemMessage);

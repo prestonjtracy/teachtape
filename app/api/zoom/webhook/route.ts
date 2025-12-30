@@ -43,11 +43,9 @@ export async function POST(req: NextRequest) {
     if (body.event === 'endpoint.url_validation') {
       const plainToken = body.payload?.plainToken
 
-      // Detailed logging for debugging
-      console.log('🔐 [Zoom Webhook] URL Validation Request:')
-      console.log('  Raw body:', rawBody)
-      console.log('  plainToken received:', plainToken)
-      console.log('  webhookSecret (first 4 chars):', webhookSecret.substring(0, 4) + '...')
+      // Logging for debugging (sensitive data redacted)
+      console.log('🔐 [Zoom Webhook] URL Validation Request received')
+      console.log('  plainToken received:', plainToken ? '[PRESENT]' : '[MISSING]')
 
       if (!plainToken) {
         console.error('❌ [Zoom Webhook] Missing plainToken in validation request')
@@ -59,8 +57,7 @@ export async function POST(req: NextRequest) {
         .update(plainToken)
         .digest('hex')
 
-      console.log('  encryptedToken generated:', encryptedToken)
-      console.log('  Response:', JSON.stringify({ plainToken, encryptedToken }))
+      console.log('✅ [Zoom Webhook] URL validation response prepared')
 
       return NextResponse.json({
         plainToken: plainToken,
@@ -176,18 +173,23 @@ async function logWebhookEvent(
     const zoomObject = payload?.payload?.object
     const occurredAt = zoomObject?.start_time || zoomObject?.end_time || new Date().toISOString()
 
-    console.log(`📝 [Zoom Webhook] ${eventType} - Meeting ID: ${meetingId}, Time: ${occurredAt}`)
+    console.log(`📝 [Zoom Webhook] ${eventType} - Meeting ID: ${meetingId}`)
 
-    const { error: insertError } = await supabase.from('zoom_webhook_events').insert({
+    // Use upsert to handle duplicate webhook deliveries idempotently
+    // Zoom may retry webhooks, so we use a unique constraint on (zoom_meeting_id, event_type, occurred_at)
+    const { error: upsertError } = await supabase.from('zoom_webhook_events').upsert({
       zoom_meeting_id: meetingId,
       booking_id: booking?.id || null,
       event_type: eventType,
       occurred_at: occurredAt,
       raw_data: payload
+    }, {
+      onConflict: 'zoom_meeting_id,event_type,occurred_at',
+      ignoreDuplicates: true
     })
 
-    if (insertError) {
-      console.error(`❌ [Zoom Webhook] Failed to insert ${eventType} event:`, insertError.message)
+    if (upsertError) {
+      console.error(`❌ [Zoom Webhook] Failed to upsert ${eventType} event:`, upsertError.message)
     } else {
       console.log(`✅ [Zoom Webhook] Logged ${eventType} event for meeting ${meetingId}`)
     }
@@ -226,7 +228,8 @@ async function logParticipantEvent(
     // Extract timestamp - Zoom uses join_time for joined, leave_time for left
     const occurredAt = participant?.join_time || participant?.leave_time || new Date().toISOString()
 
-    const { error: insertError } = await supabase.from('zoom_webhook_events').insert({
+    // Use upsert to handle duplicate webhook deliveries idempotently
+    const { error: upsertError } = await supabase.from('zoom_webhook_events').upsert({
       zoom_meeting_id: meetingId,
       booking_id: booking?.id || null,
       event_type: `meeting.participant_${action}`,
@@ -235,12 +238,16 @@ async function logParticipantEvent(
       participant_user_id: participant?.user_id,
       occurred_at: occurredAt,
       raw_data: payload
+    }, {
+      onConflict: 'zoom_meeting_id,event_type,occurred_at',
+      ignoreDuplicates: true
     })
 
-    if (insertError) {
-      console.error(`❌ [Zoom Webhook] Failed to insert participant ${action} event:`, insertError.message)
+    if (upsertError) {
+      console.error(`❌ [Zoom Webhook] Failed to upsert participant ${action} event:`, upsertError.message)
     } else {
-      console.log(`✅ [Zoom Webhook] Logged participant ${action} for meeting ${meetingId}: ${participant?.user_name || 'unknown'}`)
+      // Don't log participant names/emails for privacy
+      console.log(`✅ [Zoom Webhook] Logged participant ${action} for meeting ${meetingId}`)
     }
   } catch (error) {
     console.error(`❌ [Zoom Webhook] Error in logParticipantEvent:`, error)
