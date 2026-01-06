@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import Stripe from "stripe";
 import { z } from "zod";
-import { calcPlatformCutCents, calcAthleteFeeLineItems, getActiveCommissionSettings, validateFeeAmount } from "@/lib/stripeFees";
+import { calcPlatformCutCents, calcAthleteFeeLineItems, getActiveCommissionSettings, validateFeeAmount, MINIMUM_BOOKING_AMOUNT_CENTS } from "@/lib/stripeFees";
 
 export const dynamic = 'force-dynamic';
 export const runtime = "nodejs";
@@ -172,11 +172,33 @@ export async function POST(req: NextRequest) {
     if (athleteFeeLineItems.percentItem) totalAthleteFee += athleteFeeLineItems.percentItem.amount_cents;
     if (athleteFeeLineItems.flatItem) totalAthleteFee += athleteFeeLineItems.flatItem.amount_cents;
 
-    // Validate fee calculation
-    if (!validateFeeAmount(rateCents, actualPlatformFee)) {
-      console.error(`❌ [POST /api/film-review/checkout] Invalid fee calculation`);
+    // Check minimum booking amount first
+    if (rateCents < MINIMUM_BOOKING_AMOUNT_CENTS) {
+      const minAmountDollars = (MINIMUM_BOOKING_AMOUNT_CENTS / 100).toFixed(2);
+      console.error(`❌ [POST /api/film-review/checkout] Price below minimum: ${rateCents} cents < ${MINIMUM_BOOKING_AMOUNT_CENTS} cents`);
       return new Response(
-        JSON.stringify({ error: "Invalid fee calculation" }),
+        JSON.stringify({
+          error: "Price too low",
+          message: `Minimum price for film reviews is $${minAmountDollars}. Please update your listing price.`,
+          minimumCents: MINIMUM_BOOKING_AMOUNT_CENTS
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate fee calculation with detailed logging
+    if (!validateFeeAmount(rateCents, actualPlatformFee, true)) {
+      console.error(`❌ [POST /api/film-review/checkout] Invalid fee calculation`, {
+        rateCents,
+        actualPlatformFee,
+        coachWouldReceive: rateCents - actualPlatformFee,
+        commissionSettings
+      });
+      return new Response(
+        JSON.stringify({
+          error: "Invalid fee calculation",
+          message: "Unable to process this price. Please contact support."
+        }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }

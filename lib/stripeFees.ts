@@ -128,22 +128,66 @@ export function formatFeeBreakdown(breakdown: FeeBreakdown): {
 }
 
 /**
+ * Minimum booking amount in cents to ensure viable transactions
+ * Stripe minimum is $0.50, but we need to cover fees and ensure coach gets something
+ * $5.00 minimum ensures reasonable payout after platform fees and Stripe processing
+ */
+export const MINIMUM_BOOKING_AMOUNT_CENTS = 500; // $5.00
+
+/**
  * Validate that a fee amount is reasonable
- * 
+ *
  * @param amountCents - Original amount
  * @param feeCents - Calculated fee
+ * @param logDetails - Whether to log validation details (default: false)
  * @returns True if fee is within reasonable bounds
  */
-export function validateFeeAmount(amountCents: number, feeCents: number): boolean {
-  // Fee should be positive
-  if (feeCents <= 0) return false;
-  
+export function validateFeeAmount(amountCents: number, feeCents: number, logDetails = false): boolean {
+  const coachReceives = amountCents - feeCents;
+  const feePercentage = (feeCents / amountCents) * 100;
+
+  if (logDetails) {
+    console.log('💰 [validateFeeAmount] Validation details:', {
+      amountCents,
+      feeCents,
+      coachReceives,
+      feePercentage: feePercentage.toFixed(2) + '%',
+      minimumRequired: MINIMUM_BOOKING_AMOUNT_CENTS
+    });
+  }
+
+  // Amount must meet minimum threshold
+  if (amountCents < MINIMUM_BOOKING_AMOUNT_CENTS) {
+    if (logDetails) {
+      console.error(`❌ [validateFeeAmount] Amount ${amountCents} cents is below minimum ${MINIMUM_BOOKING_AMOUNT_CENTS} cents`);
+    }
+    return false;
+  }
+
+  // Fee should be positive (but can be 0 for no-fee scenarios)
+  if (feeCents < 0) {
+    if (logDetails) {
+      console.error(`❌ [validateFeeAmount] Negative fee: ${feeCents} cents`);
+    }
+    return false;
+  }
+
   // Fee shouldn't exceed 50% of the original amount (safety check)
-  if (feeCents > amountCents * 0.5) return false;
-  
-  // Coach should receive at least $1 (100 cents)
-  if (amountCents - feeCents < 100) return false;
-  
+  if (feeCents > amountCents * 0.5) {
+    if (logDetails) {
+      console.error(`❌ [validateFeeAmount] Fee ${feeCents} exceeds 50% of amount ${amountCents}`);
+    }
+    return false;
+  }
+
+  // Coach should receive at least 50 cents (Stripe's minimum payout)
+  if (coachReceives < 50) {
+    if (logDetails) {
+      console.error(`❌ [validateFeeAmount] Coach would only receive ${coachReceives} cents (minimum 50)`);
+    }
+    return false;
+  }
+
   return true;
 }
 
