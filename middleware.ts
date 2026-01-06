@@ -43,24 +43,75 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   return response
 }
 
+/**
+ * Get CORS headers for a given origin
+ */
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL
+
+  // Define allowed origins
+  const allowedOrigins = [
+    appUrl,
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://teachtapesports.com',
+    'https://www.teachtapesports.com'
+  ].filter(Boolean) as string[]
+
+  // Check if origin is allowed
+  const isAllowed = origin && allowedOrigins.some(allowed =>
+    origin === allowed || origin.startsWith(allowed)
+  )
+
+  // Return appropriate headers
+  if (isAllowed && origin) {
+    return {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Max-Age': '86400' // 24 hours
+    }
+  }
+
+  return {}
+}
+
 export async function middleware(request: NextRequest) {
   // Get the pathname
   const path = request.nextUrl.pathname
+  const origin = request.headers.get('origin')
 
   // CORS Configuration for API routes
   if (path.startsWith('/api/')) {
-    const origin = request.headers.get('origin')
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL
 
     // Webhooks don't need CORS (server-to-server)
     const isWebhook = path.includes('/webhook')
 
+    // Handle preflight OPTIONS requests
+    if (request.method === 'OPTIONS' && !isWebhook) {
+      const corsHeaders = getCorsHeaders(origin)
+
+      if (Object.keys(corsHeaders).length > 0) {
+        return new NextResponse(null, {
+          status: 204,
+          headers: corsHeaders
+        })
+      }
+
+      // Origin not allowed
+      return new NextResponse(null, { status: 403 })
+    }
+
     if (!isWebhook && origin) {
-      // Allow same-origin requests
+      // Define allowed origins
       const allowedOrigins = [
         appUrl,
         'http://localhost:3000',
-        'http://127.0.0.1:3000'
+        'http://127.0.0.1:3000',
+        'https://teachtapesports.com',
+        'https://www.teachtapesports.com'
       ].filter(Boolean)
 
       // Check if origin is allowed
@@ -117,11 +168,20 @@ export async function middleware(request: NextRequest) {
       )
     }
 
-    // Add rate limit headers to successful responses for API routes
+    // Add rate limit headers and CORS headers to successful responses for API routes
     const response = NextResponse.next()
     response.headers.set('X-RateLimit-Limit', String(rateLimitResult.limit))
     response.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining))
     response.headers.set('X-RateLimit-Reset', String(rateLimitResult.reset))
+
+    // Add CORS headers for browser requests
+    if (origin) {
+      const corsHeaders = getCorsHeaders(origin)
+      Object.entries(corsHeaders).forEach(([key, value]) => {
+        response.headers.set(key, value)
+      })
+    }
+
     return response
   }
 
