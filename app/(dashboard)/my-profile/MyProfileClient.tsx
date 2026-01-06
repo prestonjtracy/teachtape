@@ -67,34 +67,49 @@ export default function MyProfileClient({ initialUser, initialProfile }: MyProfi
     let isMounted = true;
 
     async function loadUser() {
+      console.log('[MyProfile] Starting loadUser...');
       try {
-        if (!isMounted) return;
-        
+        if (!isMounted) {
+          console.log('[MyProfile] Component unmounted before starting');
+          return;
+        }
+
+        console.log('[MyProfile] Calling supabase.auth.getUser()...');
         const { data: { user }, error: authError } = await supabase.auth.getUser();
-        
-        if (!isMounted) return;
-        
+        console.log('[MyProfile] getUser result:', { userId: user?.id, error: authError?.message });
+
+        if (!isMounted) {
+          console.log('[MyProfile] Component unmounted after getUser');
+          return;
+        }
+
         if (authError) {
-          console.error('Auth error:', authError);
+          console.error('[MyProfile] Auth error:', authError);
           setInitialLoading(false);
           return;
         }
-        
+
         setUser(user);
-        
+
         if (user) {
+          console.log('[MyProfile] Fetching profile for user:', user.id);
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('*')
             .eq('auth_user_id', user.id)
             .single();
-          
-          if (!isMounted) return;
-          
-          if (profileError && profileError.code !== 'PGRST116') {
-            console.error('Profile error:', profileError);
+
+          console.log('[MyProfile] Profile result:', { profileId: profile?.id, error: profileError?.message });
+
+          if (!isMounted) {
+            console.log('[MyProfile] Component unmounted after profile fetch');
+            return;
           }
-          
+
+          if (profileError && profileError.code !== 'PGRST116') {
+            console.error('[MyProfile] Profile error:', profileError);
+          }
+
           if (profile) {
             setProfile(profile);
             setFormData({
@@ -105,10 +120,13 @@ export default function MyProfileClient({ initialUser, initialProfile }: MyProfi
               avatar_url: profile.avatar_url || ''
             });
           }
+        } else {
+          console.log('[MyProfile] No user found after getUser call');
         }
       } catch (error) {
-        console.error('Load user error:', error);
+        console.error('[MyProfile] Load user error:', error);
       } finally {
+        console.log('[MyProfile] loadUser finished, setting initialLoading to false');
         if (isMounted) {
           setInitialLoading(false);
         }
