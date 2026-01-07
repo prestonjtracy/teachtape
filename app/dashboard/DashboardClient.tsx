@@ -249,20 +249,58 @@ export default function DashboardClient() {
     );
   }
   
-  // If no profile, show profile setup
+  // If no profile, show profile setup with retry option
+  const handleRetryProfile = async () => {
+    console.log('🔄 [Dashboard] Manually retrying profile fetch...');
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        const { data: profileData, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('auth_user_id', currentUser.id)
+          .single();
+
+        if (profileData) {
+          console.log('✅ [Dashboard] Profile found on retry:', profileData);
+          window.location.reload();
+        } else {
+          console.log('❌ [Dashboard] Profile still not found:', error);
+          alert('Profile not found. Please complete your profile setup.');
+        }
+      }
+    } catch (err) {
+      console.error('❌ [Dashboard] Retry failed:', err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background-subtle flex items-center justify-center">
-      <div className="text-center">
+      <div className="text-center max-w-md">
         <h1 className="text-2xl font-bold text-neutral-text mb-4">Complete Your Profile</h1>
         <p className="text-neutral-text-secondary mb-6">
           Please complete your profile setup to access the dashboard.
         </p>
-        <div className="text-sm text-gray-500 mb-4">
-          Debug: User {user ? 'authenticated' : 'not found'}, Profile {profile ? `role: ${profile.role}` : 'not found'}
+        <div className="text-sm text-gray-500 mb-4 p-3 bg-gray-100 rounded-lg">
+          <p><strong>Debug Info:</strong></p>
+          <p>User: {user ? 'authenticated' : 'not found'}</p>
+          <p>User ID: {user?.id?.slice(0, 8)}...</p>
+          <p>Email: {user?.email}</p>
+          <p>Profile: {profile ? `role: ${profile.role}` : 'not found'}</p>
         </div>
-        <Button asChild>
-          <Link href="/my-profile">Complete Profile Setup</Link>
-        </Button>
+        <div className="flex flex-col gap-3">
+          <Button asChild>
+            <Link href="/my-profile">Complete Profile Setup</Link>
+          </Button>
+          <Button variant="outline" onClick={handleRetryProfile}>
+            Retry Loading Profile
+          </Button>
+          <Button variant="ghost" asChild>
+            <Link href="/api/debug/profile-check" target="_blank">
+              Run Profile Diagnostics
+            </Link>
+          </Button>
+        </div>
       </div>
     </div>
   );

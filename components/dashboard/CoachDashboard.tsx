@@ -223,7 +223,22 @@ export default function CoachDashboard({
         {/* Quick Actions */}
         <div>
           <h2 className="text-2xl font-semibold text-neutral-text mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <Card className="hover:shadow-brand-md transition-shadow group h-full">
+              <CardBody className="p-6 text-center flex flex-col h-full">
+                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-purple-200 transition-colors">
+                  <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 className="font-semibold text-neutral-text mb-2">Film Reviews</h3>
+                <p className="text-sm text-neutral-text-muted mb-4 flex-grow">Manage athlete film review requests</p>
+                <Button asChild className="w-full">
+                  <Link href="/dashboard/film-reviews">View</Link>
+                </Button>
+              </CardBody>
+            </Card>
+
             <Card className="hover:shadow-brand-md transition-shadow group h-full">
               <CardBody className="p-6 text-center flex flex-col h-full">
                 <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:bg-green-200 transition-colors">
