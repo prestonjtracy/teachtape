@@ -119,13 +119,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Initialize auth and set up listener - run once on mount
   useEffect(() => {
     let isMounted = true;
+    let authStateReceived = false;
 
     console.log('🚀 [AuthContext] Initializing auth...');
 
-    // Set up auth state listener FIRST
+    // Safety timeout - if nothing happens in 3 seconds, just set loading to false
+    const safetyTimeout = setTimeout(() => {
+      if (isMounted && !authStateReceived) {
+        console.warn('⏰ [AuthContext] Safety timeout - forcing initialization complete');
+        setLoading(false);
+        setInitialized(true);
+      }
+    }, 3000);
+
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!isMounted) return;
+
+        authStateReceived = true;
+        clearTimeout(safetyTimeout);
 
         console.log('🔄 [AuthContext] Auth state changed:', event, session?.user ? 'user present' : 'no user');
 
@@ -134,10 +147,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         if (session?.user) {
           // Fetch profile
-          const profileData = await fetchProfile(session.user.id);
-          if (isMounted) {
-            setProfile(profileData);
-            console.log('✅ [AuthContext] Profile loaded:', profileData?.full_name || 'No profile found');
+          try {
+            const profileData = await fetchProfile(session.user.id);
+            if (isMounted) {
+              setProfile(profileData);
+              console.log('✅ [AuthContext] Profile loaded:', profileData?.full_name || 'No profile found');
+            }
+          } catch (err) {
+            console.error('❌ [AuthContext] Profile fetch error in listener:', err);
           }
         } else {
           setProfile(null);
@@ -150,42 +167,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     );
 
-    // Also do an initial check in case session already exists
-    const checkInitialSession = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        console.log('📋 [AuthContext] Initial session check:', session ? 'session exists' : 'no session', error?.message || '');
+    // Trigger initial session check - this should fire the onAuthStateChange
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      console.log('📋 [AuthContext] getSession result:', session ? 'session exists' : 'no session', error?.message || '');
 
-        if (!isMounted) return;
-
-        if (error) {
-          console.error('❌ [AuthContext] Session check error:', error);
-          setLoading(false);
-          setInitialized(true);
-          return;
-        }
-
-        // If no session from getSession, still mark as initialized
-        // The onAuthStateChange will fire with INITIAL_SESSION event
+      // If getSession returns but onAuthStateChange hasn't fired yet, handle it
+      if (isMounted && !authStateReceived) {
         if (!session) {
-          console.log('ℹ️ [AuthContext] No initial session');
+          console.log('ℹ️ [AuthContext] No session, marking as initialized');
+          clearTimeout(safetyTimeout);
           setLoading(false);
           setInitialized(true);
         }
-        // If session exists, onAuthStateChange will handle it
-      } catch (err) {
-        console.error('❌ [AuthContext] Initial session check failed:', err);
-        if (isMounted) {
-          setLoading(false);
-          setInitialized(true);
-        }
+        // If session exists, onAuthStateChange should fire - if not, safety timeout will handle it
       }
-    };
-
-    checkInitialSession();
+    }).catch(err => {
+      console.error('❌ [AuthContext] getSession error:', err);
+      if (isMounted) {
+        clearTimeout(safetyTimeout);
+        setLoading(false);
+        setInitialized(true);
+      }
+    });
 
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimeout);
       console.log('🧹 [AuthContext] Cleaning up auth listener');
       subscription.unsubscribe();
     };
