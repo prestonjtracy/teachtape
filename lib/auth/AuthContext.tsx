@@ -162,22 +162,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (!initialized) return;
 
     console.log('👂 [AuthContext] Setting up auth state listener...');
-    
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('🔄 [AuthContext] Auth state changed:', event, session?.user ? 'user present' : 'no user');
-        
+
+        // Set loading true while we fetch profile
+        setLoading(true);
         setUser(session?.user ?? null);
         setError(null);
-        
+
         if (session?.user) {
           const profileData = await fetchProfile(session.user.id);
           setProfile(profileData);
-          console.log('✅ [AuthContext] Auth change profile loaded:', profileData?.full_name || 'No name');
+          console.log('✅ [AuthContext] Auth change profile loaded:', profileData?.full_name || 'No profile found');
         } else {
           setProfile(null);
         }
-        
+
         setLoading(false);
       }
     );
