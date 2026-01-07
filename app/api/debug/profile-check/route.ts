@@ -4,13 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  // Only allow in development or with specific query param for debugging
-  const allowDebug = process.env.NODE_ENV === 'development' ||
-    req.nextUrl.searchParams.get('debug_key') === process.env.DEBUG_SECRET;
-
-  if (!allowDebug && process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: "Debug endpoint disabled in production" }, { status: 403 });
-  }
+  // Allow debug endpoint for authenticated users (they can only see their own data anyway)
 
   try {
     const supabase = createClient();
