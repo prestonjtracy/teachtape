@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 
@@ -41,8 +41,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
-  
-  const supabase = createClient();
+
+  // Memoize supabase client to prevent recreation on each render
+  const supabase = useMemo(() => createClient(), []);
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     console.log('🔍 [AuthContext] Fetching profile for userId:', userId);
@@ -115,80 +116,80 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [supabase]);
 
-  // Initialize auth state - only run once on mount
+  // Initialize auth and set up listener - run once on mount
   useEffect(() => {
     let isMounted = true;
 
-    const initializeAuth = async () => {
-      console.log('🚀 [AuthContext] Initializing auth...');
+    console.log('🚀 [AuthContext] Initializing auth...');
 
-      // Set a maximum timeout for initialization (increased to 5 seconds)
-      const timeoutId = setTimeout(() => {
-        if (isMounted) {
-          console.warn('⏰ [AuthContext] Initialization timeout reached after 5s');
-          setLoading(false);
-          setInitialized(true);
-        }
-      }, 5000);
-
-      try {
-        await refreshAuth();
-
-        if (isMounted) {
-          clearTimeout(timeoutId);
-          setLoading(false);
-          setInitialized(true);
-          console.log('✅ [AuthContext] Auth initialization complete');
-        }
-      } catch (err) {
-        console.error('❌ [AuthContext] Auth initialization failed:', err);
-        if (isMounted) {
-          clearTimeout(timeoutId);
-          setLoading(false);
-          setInitialized(true);
-        }
-      }
-    };
-
-    initializeAuth();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []); // Empty dependency array - only run once on mount
-
-  // Listen for auth state changes
-  useEffect(() => {
-    if (!initialized) return;
-
-    console.log('👂 [AuthContext] Setting up auth state listener...');
-
+    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!isMounted) return;
+
         console.log('🔄 [AuthContext] Auth state changed:', event, session?.user ? 'user present' : 'no user');
 
-        // Set loading true while we fetch profile
-        setLoading(true);
         setUser(session?.user ?? null);
         setError(null);
 
         if (session?.user) {
+          // Fetch profile
           const profileData = await fetchProfile(session.user.id);
-          setProfile(profileData);
-          console.log('✅ [AuthContext] Auth change profile loaded:', profileData?.full_name || 'No profile found');
+          if (isMounted) {
+            setProfile(profileData);
+            console.log('✅ [AuthContext] Profile loaded:', profileData?.full_name || 'No profile found');
+          }
         } else {
           setProfile(null);
         }
 
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          setInitialized(true);
+        }
       }
     );
 
+    // Also do an initial check in case session already exists
+    const checkInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('📋 [AuthContext] Initial session check:', session ? 'session exists' : 'no session', error?.message || '');
+
+        if (!isMounted) return;
+
+        if (error) {
+          console.error('❌ [AuthContext] Session check error:', error);
+          setLoading(false);
+          setInitialized(true);
+          return;
+        }
+
+        // If no session from getSession, still mark as initialized
+        // The onAuthStateChange will fire with INITIAL_SESSION event
+        if (!session) {
+          console.log('ℹ️ [AuthContext] No initial session');
+          setLoading(false);
+          setInitialized(true);
+        }
+        // If session exists, onAuthStateChange will handle it
+      } catch (err) {
+        console.error('❌ [AuthContext] Initial session check failed:', err);
+        if (isMounted) {
+          setLoading(false);
+          setInitialized(true);
+        }
+      }
+    };
+
+    checkInitialSession();
+
     return () => {
+      isMounted = false;
       console.log('🧹 [AuthContext] Cleaning up auth listener');
       subscription.unsubscribe();
     };
-  }, [supabase, fetchProfile, initialized]);
+  }, [supabase, fetchProfile]);
 
   const value: AuthContextType = {
     user,
