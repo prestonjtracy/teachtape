@@ -45,24 +45,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const supabase = createClient();
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
+    console.log('🔍 [AuthContext] Fetching profile for userId:', userId);
     try {
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('id, full_name, avatar_url, role, auth_user_id')
         .eq('auth_user_id', userId)
         .single();
-      
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error('❌ [AuthContext] Profile fetch error:', profileError);
+
+      if (profileError) {
+        if (profileError.code === 'PGRST116') {
+          console.log('ℹ️ [AuthContext] No profile found for user (PGRST116)');
+        } else {
+          console.error('❌ [AuthContext] Profile fetch error:', profileError.message, profileError.code);
+        }
         return null;
       }
-      
+
+      console.log('✅ [AuthContext] Profile fetched successfully:', profileData?.full_name);
       return profileData;
     } catch (err) {
       console.error('❌ [AuthContext] Profile fetch failed:', err);
       return null;
     }
-  }, [supabase]);
+  }, []);
 
   const refreshAuth = useCallback(async () => {
     try {
@@ -109,37 +115,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [supabase]);
 
-  // Initialize auth state
+  // Initialize auth state - only run once on mount
   useEffect(() => {
     let isMounted = true;
-    
+
     const initializeAuth = async () => {
       console.log('🚀 [AuthContext] Initializing auth...');
-      
-      // Set a maximum timeout for initialization
+
+      // Set a maximum timeout for initialization (increased to 5 seconds)
       const timeoutId = setTimeout(() => {
-        if (isMounted && !initialized) {
-          console.log('⏰ [AuthContext] Initialization timeout reached');
+        if (isMounted) {
+          console.warn('⏰ [AuthContext] Initialization timeout reached after 5s');
           setLoading(false);
           setInitialized(true);
         }
-      }, 2000);
+      }, 5000);
 
       try {
         await refreshAuth();
-        
+
         if (isMounted) {
+          clearTimeout(timeoutId);
           setLoading(false);
           setInitialized(true);
-          clearTimeout(timeoutId);
           console.log('✅ [AuthContext] Auth initialization complete');
         }
       } catch (err) {
         console.error('❌ [AuthContext] Auth initialization failed:', err);
         if (isMounted) {
+          clearTimeout(timeoutId);
           setLoading(false);
           setInitialized(true);
-          clearTimeout(timeoutId);
         }
       }
     };
@@ -149,7 +155,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       isMounted = false;
     };
-  }, [refreshAuth, initialized]);
+  }, []); // Empty dependency array - only run once on mount
 
   // Listen for auth state changes
   useEffect(() => {
