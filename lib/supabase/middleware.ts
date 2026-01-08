@@ -1,61 +1,65 @@
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
-  // Simple pass-through response
-  const response = NextResponse.next({
+  let supabaseResponse = NextResponse.next({
     request,
   })
 
-  // Get all cookies to find the Supabase auth token
-  const allCookies = request.cookies.getAll()
-  const authCookie = allCookies.find(cookie => cookie.name.includes('-auth-token'))
-
-  let hasValidAuth = false
-
-  if (authCookie?.value) {
-    try {
-      // Parse the auth cookie to check if there's an access token
-      const parsed = JSON.parse(decodeURIComponent(authCookie.value))
-      const accessToken = parsed.access_token || parsed[0]?.access_token
-
-      if (accessToken) {
-        // Basic JWT structure check (not full validation)
-        const parts = accessToken.split('.')
-        if (parts.length === 3) {
-          // Decode payload to check expiration - use Buffer for base64 decode in Edge Runtime
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString())
-          const now = Math.floor(Date.now() / 1000)
-
-          // Check if token is not expired
-          if (payload.exp && payload.exp > now) {
-            hasValidAuth = true
-          }
-        }
-      }
-    } catch (error) {
-      // Invalid token format, treat as unauthenticated
-      // Silently fail in production
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value)
+          )
+          supabaseResponse = NextResponse.next({
+            request,
+          })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
     }
-  }
+  )
+
+  // IMPORTANT: Do not add any logic between createServerClient and
+  // supabase.auth.getUser(). A simple mistake could make your application
+  // vulnerable to security issues.
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   // Allow auth callback through regardless of auth state
   if (request.nextUrl.pathname.startsWith('/auth/callback')) {
-    return response
+    return supabaseResponse
   }
 
-  // SECURITY: Fail closed for protected routes
+  // Protected routes that require authentication
   const isProtectedRoute =
     request.nextUrl.pathname.startsWith('/dashboard') ||
     request.nextUrl.pathname.startsWith('/admin') ||
     request.nextUrl.pathname.startsWith('/my-profile') ||
-    request.nextUrl.pathname.startsWith('/my-listings')
+    request.nextUrl.pathname.startsWith('/my-listings') ||
+    request.nextUrl.pathname.startsWith('/main-dashboard') ||
+    request.nextUrl.pathname.startsWith('/coach-dashboard') ||
+    request.nextUrl.pathname.startsWith('/athlete-dashboard')
 
-  if (!hasValidAuth && isProtectedRoute) {
+  if (!user && isProtectedRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     url.searchParams.set('next', request.nextUrl.pathname)
     return NextResponse.redirect(url)
   }
 
-  return response
+  // IMPORTANT: Always return supabaseResponse, not a new NextResponse.
+  // The supabaseResponse contains the updated cookies from the auth refresh.
+  return supabaseResponse
 }

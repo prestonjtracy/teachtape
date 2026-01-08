@@ -41,6 +41,22 @@ export async function GET() {
       .eq('coach_id', coach.id)
       : { data: null, error: null }
 
+    // Get bookings where user is coach
+    const { data: coachBookings, error: coachBookingsError } = await supabase
+      .from('bookings')
+      .select('id, booking_type, review_status, status, created_at, coach_id, customer_email, athlete_email, film_url, listing_id')
+      .eq('coach_id', profile.id)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    // Get bookings where user is customer/athlete
+    const { data: athleteBookings, error: athleteBookingsError } = await supabase
+      .from('bookings')
+      .select('id, booking_type, review_status, status, created_at, coach_id, customer_email, athlete_email, film_url, listing_id')
+      .eq('customer_email', user.email)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
     return NextResponse.json({
       user: {
         id: user.id,
@@ -50,7 +66,17 @@ export async function GET() {
       coach: coach,
       coachError: coachError,
       services: services,
-      servicesCount: services?.length || 0
+      servicesCount: services?.length || 0,
+      coachBookings: {
+        count: coachBookings?.length || 0,
+        error: coachBookingsError?.message || null,
+        data: coachBookings
+      },
+      athleteBookings: {
+        count: athleteBookings?.length || 0,
+        error: athleteBookingsError?.message || null,
+        data: athleteBookings
+      }
     })
   } catch (error) {
     console.error('Debug error:', error)

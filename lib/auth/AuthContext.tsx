@@ -45,31 +45,58 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Memoize supabase client to prevent recreation on each render
   const supabase = useMemo(() => createClient(), []);
 
-  const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
-    console.log('🔍 [AuthContext] Fetching profile for userId:', userId);
+  const fetchProfile = useCallback(async (userId: string, retryCount = 0): Promise<Profile | null> => {
+    console.log('🔍 [AuthContext] Fetching profile for userId:', userId, retryCount > 0 ? `(retry ${retryCount})` : '');
+
+    // Debug: Check if supabase client is ready
+    console.log('🔍 [AuthContext] Supabase client check - URL:', process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30));
+
     try {
-      const { data: profileData, error: profileError } = await supabase
+      console.log('🔍 [AuthContext] Making profile query...');
+      const { data: profileData, error: profileError, status, statusText } = await supabase
         .from('profiles')
         .select('id, full_name, avatar_url, role, auth_user_id')
         .eq('auth_user_id', userId)
         .single();
 
+      console.log('📋 [AuthContext] Profile query response - status:', status, 'statusText:', statusText);
+      console.log('📋 [AuthContext] Profile data:', profileData);
+      console.log('📋 [AuthContext] Profile error:', profileError);
+
       if (profileError) {
         if (profileError.code === 'PGRST116') {
-          console.log('ℹ️ [AuthContext] No profile found for user (PGRST116)');
+          console.log('ℹ️ [AuthContext] No profile found for user (PGRST116) - this means RLS blocked or no row exists');
+          // Retry up to 2 times with delay - profile might not be created yet
+          if (retryCount < 2) {
+            console.log('🔄 [AuthContext] Retrying profile fetch in 500ms...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            return fetchProfile(userId, retryCount + 1);
+          }
         } else {
-          console.error('❌ [AuthContext] Profile fetch error:', profileError.message, profileError.code);
+          console.error('❌ [AuthContext] Profile fetch error:', profileError.message, 'code:', profileError.code, 'details:', profileError.details, 'hint:', profileError.hint);
+          // Retry on other errors too
+          if (retryCount < 2) {
+            console.log('🔄 [AuthContext] Retrying profile fetch in 500ms...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            return fetchProfile(userId, retryCount + 1);
+          }
         }
         return null;
       }
 
-      console.log('✅ [AuthContext] Profile fetched successfully:', profileData?.full_name);
+      console.log('✅ [AuthContext] Profile fetched successfully:', profileData?.full_name, 'role:', profileData?.role);
       return profileData;
     } catch (err) {
-      console.error('❌ [AuthContext] Profile fetch failed:', err);
+      console.error('❌ [AuthContext] Profile fetch exception:', err);
+      // Retry on exception
+      if (retryCount < 2) {
+        console.log('🔄 [AuthContext] Retrying profile fetch in 500ms...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return fetchProfile(userId, retryCount + 1);
+      }
       return null;
     }
-  }, []);
+  }, [supabase]);
 
   const refreshAuth = useCallback(async () => {
     try {
@@ -119,34 +146,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Initialize auth and set up listener - run once on mount
   useEffect(() => {
     let isMounted = true;
-    let authStateReceived = false;
 
     console.log('🚀 [AuthContext] Initializing auth...');
 
-    // Safety timeout - if nothing happens in 3 seconds, just set loading to false
-    const safetyTimeout = setTimeout(() => {
-      if (isMounted && !authStateReceived) {
-        console.warn('⏰ [AuthContext] Safety timeout - forcing initialization complete');
-        setLoading(false);
-        setInitialized(true);
-      }
-    }, 3000);
-
-    // Set up auth state listener
+    // Set up auth state listener FIRST - this is the primary way we get auth state
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!isMounted) return;
 
-        authStateReceived = true;
-        clearTimeout(safetyTimeout);
-
         console.log('🔄 [AuthContext] Auth state changed:', event, session?.user ? 'user present' : 'no user');
 
+        // Update user immediately
         setUser(session?.user ?? null);
         setError(null);
 
         if (session?.user) {
-          // Fetch profile
+          // Fetch profile - this is critical, so we wait for it
+          console.log('🔍 [AuthContext] Fetching profile for userId:', session.user.id);
           try {
             const profileData = await fetchProfile(session.user.id);
             if (isMounted) {
@@ -155,36 +171,45 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
           } catch (err) {
             console.error('❌ [AuthContext] Profile fetch error in listener:', err);
+            if (isMounted) {
+              setProfile(null);
+            }
           }
         } else {
           setProfile(null);
         }
 
+        // ONLY set loading false AFTER profile is fetched
+        if (isMounted) {
+          setLoading(false);
+          setInitialized(true);
+          console.log('✅ [AuthContext] Initialization complete');
+        }
+      }
+    );
+
+    // Trigger initial session check
+    // Note: getSession() will cause onAuthStateChange to fire with INITIAL_SESSION
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      console.log('📋 [AuthContext] getSession result:', session ? 'session exists' : 'no session', error?.message || '');
+
+      // Only handle the "no session" case here - if there's a session, onAuthStateChange handles it
+      if (isMounted && !session && !error) {
+        console.log('ℹ️ [AuthContext] No session found, marking as initialized');
+        setLoading(false);
+        setInitialized(true);
+      }
+
+      if (error) {
+        console.error('❌ [AuthContext] getSession error:', error);
         if (isMounted) {
           setLoading(false);
           setInitialized(true);
         }
       }
-    );
-
-    // Trigger initial session check - this should fire the onAuthStateChange
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      console.log('📋 [AuthContext] getSession result:', session ? 'session exists' : 'no session', error?.message || '');
-
-      // If getSession returns but onAuthStateChange hasn't fired yet, handle it
-      if (isMounted && !authStateReceived) {
-        if (!session) {
-          console.log('ℹ️ [AuthContext] No session, marking as initialized');
-          clearTimeout(safetyTimeout);
-          setLoading(false);
-          setInitialized(true);
-        }
-        // If session exists, onAuthStateChange should fire - if not, safety timeout will handle it
-      }
     }).catch(err => {
-      console.error('❌ [AuthContext] getSession error:', err);
+      console.error('❌ [AuthContext] getSession exception:', err);
       if (isMounted) {
-        clearTimeout(safetyTimeout);
         setLoading(false);
         setInitialized(true);
       }
@@ -192,7 +217,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return () => {
       isMounted = false;
-      clearTimeout(safetyTimeout);
       console.log('🧹 [AuthContext] Cleaning up auth listener');
       subscription.unsubscribe();
     };

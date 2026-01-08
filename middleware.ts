@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, getClientIdentifier, RateLimitPresets } from '@/lib/rateLimit'
+import { updateSession } from '@/lib/supabase/middleware'
 
 /**
  * Add security headers to response
@@ -186,38 +187,12 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Protected routes that require authentication
-  const isProtectedRoute =
-    path.startsWith('/dashboard') ||
-    path.startsWith('/admin') ||
-    path.startsWith('/my-profile') ||
-    path.startsWith('/my-listings') ||
-    path.startsWith('/main-dashboard') ||
-    path.startsWith('/coach-dashboard') ||
-    path.startsWith('/athlete-dashboard')
+  // For all non-API routes, use Supabase session refresh
+  // This is critical for maintaining auth state across the app
+  const supabaseResponse = await updateSession(request)
 
-  // If not a protected route, allow through with security headers
-  if (!isProtectedRoute) {
-    const response = NextResponse.next()
-    return addSecurityHeaders(response)
-  }
-
-  // Check for Supabase auth cookie (format: sb-<project-ref>-auth-token)
-  const cookies = request.cookies.getAll()
-  const hasAuthCookie = cookies.some(cookie =>
-    (cookie.name.startsWith('sb-') && cookie.name.includes('auth-token')) && cookie.value
-  )
-
-  // If no auth cookie on protected route, redirect to login
-  if (!hasAuthCookie) {
-    const loginUrl = new URL('/auth/login', request.url)
-    loginUrl.searchParams.set('next', path)
-    return NextResponse.redirect(loginUrl)
-  }
-
-  // Has auth cookie, allow through with security headers
-  const response = NextResponse.next()
-  return addSecurityHeaders(response)
+  // Add security headers to the response from Supabase middleware
+  return addSecurityHeaders(supabaseResponse)
 }
 
 export const config = {
