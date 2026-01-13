@@ -149,6 +149,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     console.log('🚀 [AuthContext] Initializing auth...');
 
+    // Safety timeout - if auth hasn't resolved in 5 seconds, stop loading
+    // This prevents the infinite loading state
+    const safetyTimeout = setTimeout(() => {
+      if (isMounted && loading) {
+        console.warn('⚠️ [AuthContext] Safety timeout reached - forcing loading to false');
+        setLoading(false);
+        setInitialized(true);
+      }
+    }, 5000);
+
     // Set up auth state listener FIRST - this is the primary way we get auth state
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -217,6 +227,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimeout);
       console.log('🧹 [AuthContext] Cleaning up auth listener');
       subscription.unsubscribe();
     };
