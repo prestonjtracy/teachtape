@@ -57,89 +57,53 @@ export default function DashboardClient() {
   useEffect(() => {
     async function fetchCoachData() {
       if (!profile || profile.role !== 'coach') return;
-      
+
       setDashboardLoading(true);
       try {
-        console.log('🔍 [Dashboard] Fetching coach-specific data...');
-        
-        // Get coach data
-        const { data: coach } = await supabase
-          .from('coaches')
-          .select('id, stripe_account_id')
-          .eq('profile_id', profile.id)
-          .single();
+        console.log('🔍 [Dashboard] Fetching coach data via API...');
 
-        // Fetch bookings
-        const { data: bookingsData, error: bookingsError } = await supabase
-          .from('bookings')
-          .select(`
-            id,
-            created_at,
-            customer_email,
-            amount_paid_cents,
-            status,
-            listing_id,
-            stripe_session_id,
-            starts_at,
-            ends_at,
-            listing:listings(title)
-          `)
-          .eq('coach_id', profile.id)
-          .order('created_at', { ascending: false });
+        // Use server-side API to fetch coach data (bypasses RLS issues)
+        const coachDataResponse = await fetch('/api/dashboard/coach-data', {
+          credentials: 'include'
+        });
 
-        if (bookingsError) {
-          console.error('❌ [Dashboard] Failed to fetch bookings:', bookingsError);
-        }
+        if (coachDataResponse.ok) {
+          const coachData = await coachDataResponse.json();
+          console.log('✅ [Dashboard] Coach data fetched:', coachData);
 
-        if (bookingsData) {
-          console.log('✅ [Dashboard] Fetched bookings:', bookingsData.length);
-          setCoachBookings(bookingsData as unknown as Booking[]);
-          
-          // Calculate earnings
-          const now = new Date();
-          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-          
-          const paidBookings = bookingsData.filter((b: any) => b.status === 'paid');
-          
-          setCoachEarnings({
-            last7Days: paidBookings
-              .filter((b: any) => new Date(b.created_at) >= sevenDaysAgo)
-              .reduce((sum: number, b: any) => sum + b.amount_paid_cents, 0),
-            monthToDate: paidBookings
-              .filter((b: any) => new Date(b.created_at) >= monthStart)
-              .reduce((sum: number, b: any) => sum + b.amount_paid_cents, 0),
-            allTime: paidBookings
-              .reduce((sum: number, b: any) => sum + b.amount_paid_cents, 0)
-          });
-        }
+          setCoachBookings(coachData.bookings || []);
+          setCoachEarnings(coachData.earnings || { last7Days: 0, monthToDate: 0, allTime: 0 });
 
-        // Fetch real Stripe account status from API
-        try {
-          const stripeStatusResponse = await fetch('/api/stripe/account-status');
-          if (stripeStatusResponse.ok) {
-            const stripeData = await stripeStatusResponse.json();
-            setStripeStatus({
-              accountId: stripeData.accountId,
-              chargesEnabled: stripeData.chargesEnabled,
-              needsOnboarding: stripeData.needsOnboarding
+          // Fetch Stripe status separately
+          try {
+            const stripeStatusResponse = await fetch('/api/stripe/account-status', {
+              credentials: 'include'
             });
-          } else {
-            // Fallback to basic check if API fails
+            if (stripeStatusResponse.ok) {
+              const stripeData = await stripeStatusResponse.json();
+              setStripeStatus({
+                accountId: stripeData.accountId,
+                chargesEnabled: stripeData.chargesEnabled,
+                needsOnboarding: stripeData.needsOnboarding
+              });
+            } else {
+              // Fallback
+              setStripeStatus({
+                accountId: coachData.coach?.stripe_account_id || null,
+                chargesEnabled: false,
+                needsOnboarding: true
+              });
+            }
+          } catch (stripeError) {
+            console.error('Error fetching Stripe status:', stripeError);
             setStripeStatus({
-              accountId: coach?.stripe_account_id || null,
+              accountId: coachData.coach?.stripe_account_id || null,
               chargesEnabled: false,
               needsOnboarding: true
             });
           }
-        } catch (error) {
-          console.error('Error fetching Stripe status:', error);
-          // Fallback
-          setStripeStatus({
-            accountId: coach?.stripe_account_id || null,
-            chargesEnabled: false,
-            needsOnboarding: true
-          });
+        } else {
+          console.error('❌ [Dashboard] Coach data API error:', coachDataResponse.status);
         }
       } catch (error) {
         console.error('❌ [Dashboard] Error fetching coach data:', error);
