@@ -56,62 +56,23 @@ export default function BookingRequestsList({ coachId, onRequestUpdate }: Bookin
 
   async function fetchRequests() {
     try {
-      console.log('🔍 [BookingRequestsList] Fetching requests for coach ID:', coachId);
-      
-      const { data, error } = await supabase
-        .from('booking_requests')
-        .select(`
-          *,
-          listing:listings!inner(
-            id,
-            title,
-            price_cents,
-            duration_minutes
-          ),
-          athlete:profiles!booking_requests_athlete_id_fkey(
-            id,
-            full_name,
-            avatar_url
-          ),
-          coach:profiles!booking_requests_coach_id_fkey(
-            id,
-            full_name
-          )
-        `)
-        .eq('coach_id', coachId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
+      console.log('🔍 [BookingRequestsList] Fetching requests via API...');
 
-      if (error) {
-        console.error('❌ [BookingRequestsList] Error fetching requests:', error);
+      // Use server-side API to bypass RLS issues
+      const response = await fetch('/api/dashboard/booking-requests', {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        console.error('❌ [BookingRequestsList] API error:', response.status);
         setError('Failed to load booking requests');
         return;
       }
 
-      console.log('✅ [BookingRequestsList] Successfully fetched', data?.length || 0, 'requests');
+      const data = await response.json();
+      console.log('✅ [BookingRequestsList] Successfully fetched', data.requests?.length || 0, 'requests');
 
-      // Fetch last message for each request
-      const requestsWithMessages = await Promise.all(
-        (data || []).map(async (request) => {
-          if (!request.conversation_id) {
-            return { ...request, last_message: null };
-          }
-
-          const { data: messages } = await supabase
-            .from('messages')
-            .select('body, created_at')
-            .eq('conversation_id', request.conversation_id)
-            .order('created_at', { ascending: false })
-            .limit(1);
-
-          return {
-            ...request,
-            last_message: messages && messages.length > 0 ? messages[0] : null,
-          };
-        })
-      );
-
-      setRequests(requestsWithMessages as BookingRequestWithLastMessage[]);
+      setRequests(data.requests || []);
       setError(null);
     } catch (err) {
       console.error('Error in fetchRequests:', err);
