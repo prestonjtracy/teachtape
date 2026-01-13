@@ -46,49 +46,46 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const supabase = useMemo(() => createClient(), []);
 
   const fetchProfile = useCallback(async (userId: string, retryCount = 0): Promise<Profile | null> => {
-    console.log('🔍 [AuthContext] Fetching profile for userId:', userId, retryCount > 0 ? `(retry ${retryCount})` : '');
-
-    // Debug: Check if supabase client is ready
-    console.log('🔍 [AuthContext] Supabase client check - URL:', process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30));
+    console.log('🔍 [AuthContext] Fetching profile via API for userId:', userId, retryCount > 0 ? `(retry ${retryCount})` : '');
 
     try {
-      console.log('🔍 [AuthContext] Making profile query...');
-      const { data: profileData, error: profileError, status, statusText } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url, role, auth_user_id')
-        .eq('auth_user_id', userId)
-        .single();
+      // Use server-side API to fetch profile - this bypasses client-side RLS issues
+      const response = await fetch('/api/auth/profile', {
+        method: 'GET',
+        credentials: 'include', // Important: include cookies for auth
+      });
 
-      console.log('📋 [AuthContext] Profile query response - status:', status, 'statusText:', statusText);
-      console.log('📋 [AuthContext] Profile data:', profileData);
-      console.log('📋 [AuthContext] Profile error:', profileError);
+      console.log('📋 [AuthContext] API response status:', response.status);
 
-      if (profileError) {
-        if (profileError.code === 'PGRST116') {
-          console.log('ℹ️ [AuthContext] No profile found for user (PGRST116) - this means RLS blocked or no row exists');
-          // Retry up to 2 times with delay - profile might not be created yet
-          if (retryCount < 2) {
-            console.log('🔄 [AuthContext] Retrying profile fetch in 500ms...');
-            await new Promise(resolve => setTimeout(resolve, 500));
-            return fetchProfile(userId, retryCount + 1);
-          }
-        } else {
-          console.error('❌ [AuthContext] Profile fetch error:', profileError.message, 'code:', profileError.code, 'details:', profileError.details, 'hint:', profileError.hint);
-          // Retry on other errors too
-          if (retryCount < 2) {
-            console.log('🔄 [AuthContext] Retrying profile fetch in 500ms...');
-            await new Promise(resolve => setTimeout(resolve, 500));
-            return fetchProfile(userId, retryCount + 1);
-          }
+      if (!response.ok) {
+        console.error('❌ [AuthContext] Profile API error:', response.status);
+        if (retryCount < 2) {
+          console.log('🔄 [AuthContext] Retrying profile fetch in 500ms...');
+          await new Promise(resolve => setTimeout(resolve, 500));
+          return fetchProfile(userId, retryCount + 1);
         }
         return null;
       }
 
-      console.log('✅ [AuthContext] Profile fetched successfully:', profileData?.full_name, 'role:', profileData?.role);
-      return profileData;
+      const data = await response.json();
+      console.log('📋 [AuthContext] Profile API response:', data);
+
+      if (data.profile) {
+        console.log('✅ [AuthContext] Profile fetched successfully:', data.profile.full_name, 'role:', data.profile.role);
+        return data.profile;
+      }
+
+      // Profile not found - retry a couple times in case it's being created
+      if (retryCount < 2) {
+        console.log('🔄 [AuthContext] No profile found, retrying in 500ms...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return fetchProfile(userId, retryCount + 1);
+      }
+
+      console.log('ℹ️ [AuthContext] No profile found after retries');
+      return null;
     } catch (err) {
       console.error('❌ [AuthContext] Profile fetch exception:', err);
-      // Retry on exception
       if (retryCount < 2) {
         console.log('🔄 [AuthContext] Retrying profile fetch in 500ms...');
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -96,7 +93,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       return null;
     }
-  }, [supabase]);
+  }, []);
 
   const refreshAuth = useCallback(async () => {
     try {
