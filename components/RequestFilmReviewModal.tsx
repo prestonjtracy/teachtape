@@ -1,6 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface Listing {
   id: string;
@@ -34,7 +38,7 @@ function formatTurnaround(hours: number): string {
   return `${days}d ${remainingHours}h`;
 }
 
-export default function RequestFilmReviewModal({
+function RequestFilmReviewContent({
   isOpen,
   onClose,
   coachId,
@@ -45,6 +49,34 @@ export default function RequestFilmReviewModal({
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [needsPaymentMethod, setNeedsPaymentMethod] = useState(true);
+  const [success, setSuccess] = useState(false);
+
+  const stripe = useStripe();
+  const elements = useElements();
+
+  // Check if user has saved payment methods on modal open
+  useEffect(() => {
+    if (isOpen) {
+      checkPaymentMethods();
+      // Reset state when modal opens
+      setVideoUrl('');
+      setNotes('');
+      setError('');
+      setSuccess(false);
+    }
+  }, [isOpen]);
+
+  const checkPaymentMethods = async () => {
+    try {
+      const response = await fetch('/api/payment-methods/check');
+      const data = await response.json();
+      setNeedsPaymentMethod(!data.hasPaymentMethods);
+    } catch (error) {
+      console.error('Error checking payment methods:', error);
+      setNeedsPaymentMethod(true); // Assume we need to collect payment method
+    }
+  };
 
   const handleSubmit = async () => {
     if (!videoUrl.trim()) {
@@ -64,8 +96,47 @@ export default function RequestFilmReviewModal({
     setError('');
 
     try {
-      // Create Stripe checkout session for film review
-      const response = await fetch('/api/film-review/checkout', {
+      let paymentMethodId = null;
+      let setupIntentId = null;
+
+      // Handle payment method collection if needed
+      if (needsPaymentMethod && stripe && elements) {
+        const cardElement = elements.getElement(CardElement);
+        if (!cardElement) {
+          throw new Error('Card element not found');
+        }
+
+        // First, create a setup intent
+        const setupResponse = await fetch('/api/payment-methods/setup-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const setupData = await setupResponse.json();
+
+        if (!setupResponse.ok) {
+          throw new Error(setupData.error || 'Failed to create setup intent');
+        }
+
+        // Confirm the setup intent with the card
+        const { setupIntent: confirmedSetupIntent, error: confirmError } =
+          await stripe.confirmCardSetup(setupData.clientSecret, {
+            payment_method: {
+              card: cardElement,
+            }
+          });
+
+        if (confirmError) {
+          throw new Error(confirmError.message);
+        }
+
+        if (confirmedSetupIntent?.payment_method) {
+          paymentMethodId = confirmedSetupIntent.payment_method as string;
+          setupIntentId = confirmedSetupIntent.id;
+        }
+      }
+
+      // Create the film review request (no charge yet)
+      const response = await fetch('/api/film-review/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -73,21 +144,25 @@ export default function RequestFilmReviewModal({
           coach_id: coachId,
           film_url: videoUrl,
           athlete_notes: notes || '',
+          setup_intent_id: setupIntentId,
+          payment_method_id: paymentMethodId,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to create checkout session');
+        throw new Error(data.error || 'Failed to create film review request');
       }
 
-      // Redirect to Stripe Checkout
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error('Checkout session created but no payment URL returned');
-      }
+      // Show success message
+      setSuccess(true);
+      setLoading(false);
+
+      // Redirect after a short delay
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 2000);
 
     } catch (err) {
       console.error('Error creating film review request:', err);
@@ -97,6 +172,28 @@ export default function RequestFilmReviewModal({
   };
 
   if (!isOpen) return null;
+
+  if (success) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl max-w-lg w-full p-8 text-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-[#123C7A] mb-2">Request Sent!</h2>
+          <p className="text-gray-600 mb-4">
+            Your film review request has been sent to {coachName}. You'll be notified when they accept it.
+          </p>
+          <p className="text-sm text-gray-500">
+            Your card will only be charged if the coach accepts your request.
+          </p>
+          <p className="text-xs text-gray-400 mt-4">Redirecting to dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -176,6 +273,33 @@ export default function RequestFilmReviewModal({
             </p>
           </div>
 
+          {/* Payment Method Collection */}
+          {needsPaymentMethod && (
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Payment Method
+              </label>
+              <div className="border border-gray-300 rounded-lg p-4">
+                <CardElement
+                  options={{
+                    style: {
+                      base: {
+                        fontSize: '16px',
+                        color: '#424770',
+                        '::placeholder': {
+                          color: '#aab7c4',
+                        },
+                      },
+                    },
+                  }}
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                  Your card will only be charged if {coachName} accepts your request.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex space-x-3">
             <button
@@ -186,21 +310,29 @@ export default function RequestFilmReviewModal({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={loading || !videoUrl.trim()}
+              disabled={loading || !videoUrl.trim() || (needsPaymentMethod && !stripe)}
               className="flex-1 px-4 py-3 bg-[#FF5A1F] text-white rounded-lg hover:bg-[#E44F1B] focus:outline-none focus:ring-2 focus:ring-[#FF5A1F] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold"
             >
               {loading ? (
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  Processing...
+                  Sending Request...
                 </div>
               ) : (
-                'Continue to Payment'
+                'Send Request'
               )}
             </button>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RequestFilmReviewModal(props: RequestFilmReviewModalProps) {
+  return (
+    <Elements stripe={stripePromise}>
+      <RequestFilmReviewContent {...props} />
+    </Elements>
   );
 }
