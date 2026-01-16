@@ -276,7 +276,7 @@ export async function POST(req: NextRequest) {
     if (insertError) {
       console.error('❌ [POST /api/film-review/request] Failed to create request:', insertError);
       return NextResponse.json(
-        { error: "Failed to create film review request" },
+        { error: `Failed to create film review request: ${insertError.message}` },
         { status: 500 }
       );
     }
@@ -304,10 +304,12 @@ export async function POST(req: NextRequest) {
     }
 
     console.error(`❌ [POST /api/film-review/request] Unexpected error:`, error);
+    // Return the actual error message for debugging
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : "Unknown error"
+        error: `Failed to create film review request: ${errorMessage}`,
+        details: errorMessage
       },
       { status: 500 }
     );
