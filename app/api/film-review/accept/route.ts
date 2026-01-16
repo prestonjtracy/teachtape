@@ -269,12 +269,19 @@ export async function POST(req: NextRequest) {
 
       if (updateError) {
         console.error(`❌ [POST /api/film-review/accept] Failed to update booking:`, updateError);
-        // Payment succeeded but DB update failed - this is a critical error
-        // Log for manual intervention but return success since payment went through
         console.error('🚨 CRITICAL: Payment succeeded but booking update failed!', {
           bookingId,
           paymentIntentId: paymentIntent.id
         });
+        // Return error so user knows something went wrong
+        return new Response(
+          JSON.stringify({
+            error: `Payment was processed but failed to update booking status: ${updateError.message}. Please contact support.`,
+            payment_processed: true,
+            payment_intent_id: paymentIntent.id
+          }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
       }
     } else {
       // Old flow - booking already paid, just update status

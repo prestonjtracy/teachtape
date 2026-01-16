@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function AcceptDeclineButtons({ bookingId }: { bookingId: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const router = useRouter();
 
   const handleAccept = async () => {
     setLoading(true);
@@ -23,7 +26,11 @@ export default function AcceptDeclineButtons({ bookingId }: { bookingId: string 
         throw new Error(data.error || "Failed to accept");
       }
 
-      window.location.reload();
+      setSuccess(true);
+      // Use Next.js router for soft navigation (preserves auth)
+      setTimeout(() => {
+        router.refresh();
+      }, 1500);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setError(errorMessage);
@@ -52,13 +59,22 @@ export default function AcceptDeclineButtons({ bookingId }: { bookingId: string 
         throw new Error(data.error || "Failed to decline");
       }
 
-      window.location.reload();
+      // Use Next.js router for soft navigation (preserves auth)
+      router.refresh();
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setError(errorMessage);
       setLoading(false);
     }
   };
+
+  if (success) {
+    return (
+      <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+        <p className="text-sm text-green-700 font-medium">Accepted! Refreshing...</p>
+      </div>
+    );
+  }
 
   return (
     <div>
