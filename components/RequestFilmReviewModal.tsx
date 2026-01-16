@@ -159,10 +159,10 @@ function RequestFilmReviewContent({
       setSuccess(true);
       setLoading(false);
 
-      // Redirect after a short delay
+      // Close modal after a short delay (no redirect to avoid logout)
       setTimeout(() => {
-        window.location.href = '/dashboard';
-      }, 2000);
+        onClose();
+      }, 3000);
 
     } catch (err) {
       console.error('Error creating film review request:', err);
@@ -189,7 +189,6 @@ function RequestFilmReviewContent({
           <p className="text-sm text-gray-500">
             Your card will only be charged if the coach accepts your request.
           </p>
-          <p className="text-xs text-gray-400 mt-4">Redirecting to dashboard...</p>
         </div>
       </div>
     );
