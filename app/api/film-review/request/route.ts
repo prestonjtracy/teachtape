@@ -252,6 +252,9 @@ export async function POST(req: NextRequest) {
     // Use admin client to create the booking record
     const adminClient = createAdminClient();
 
+    // For film reviews, we use the current time as starts_at since there's no scheduled time
+    const now = new Date().toISOString();
+
     const { data: filmReviewRequest, error: insertError } = await adminClient
       .from('bookings')
       .insert({
@@ -269,6 +272,8 @@ export async function POST(req: NextRequest) {
         setup_intent_id: setupIntentId,
         payment_method_id: paymentMethodId,
         stripe_customer_id: stripeCustomerId,
+        starts_at: now, // Required field - use current time for film reviews
+        ends_at: now,   // Required field - use current time for film reviews
       })
       .select('id')
       .single();
