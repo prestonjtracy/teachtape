@@ -35,6 +35,12 @@ export async function GET(req: NextRequest) {
         ends_at,
         created_at,
         booking_type,
+        review_status,
+        review_content,
+        review_document_url,
+        review_completed_at,
+        film_url,
+        athlete_notes,
         coach:coach_id (
           full_name,
           avatar_url
@@ -42,7 +48,8 @@ export async function GET(req: NextRequest) {
         listings:listing_id (
           title,
           duration_minutes,
-          description
+          description,
+          turnaround_hours
         ),
         reviews!reviews_booking_id_fkey (
           id
@@ -69,7 +76,8 @@ export async function GET(req: NextRequest) {
       listing: (booking.listings as any)?.[0] ? {
         title: (booking.listings as any)[0].title,
         duration_minutes: (booking.listings as any)[0].duration_minutes,
-        description: (booking.listings as any)[0].description
+        description: (booking.listings as any)[0].description,
+        turnaround_hours: (booking.listings as any)[0].turnaround_hours
       } : null,
       hasReview: Array.isArray(booking.reviews) && booking.reviews.length > 0
     })) || [];

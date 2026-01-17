@@ -7,8 +7,8 @@ import { generateFilmReviewCompletedAthleteEmail, FilmReviewEmailData } from "@/
 export const dynamic = 'force-dynamic';
 export const runtime = "nodejs";
 
-// Validate review document URL - allow common document sharing platforms
-const isValidReviewUrl = (url: string): boolean => {
+// Validate supplemental document URL - allow common document sharing platforms
+const isValidSupplementalUrl = (url: string): boolean => {
   try {
     const urlObj = new URL(url);
     const allowedHosts = [
@@ -31,11 +31,19 @@ const isValidReviewUrl = (url: string): boolean => {
   }
 };
 
+// Schema for structured review content
+const ReviewContentSchema = z.object({
+  overallAssessment: z.string().min(200, "Overall assessment must be at least 200 characters"),
+  strengths: z.string().min(100, "Strengths must be at least 100 characters"),
+  areasForImprovement: z.string().min(100, "Areas for improvement must be at least 100 characters"),
+  recommendedDrills: z.string().min(100, "Recommended drills must be at least 100 characters"),
+  keyTimestamps: z.string().nullable().optional(),
+  supplementalDocUrl: z.string().url().nullable().optional(),
+});
+
 const UploadReviewSchema = z.object({
   bookingId: z.string().uuid("Invalid booking ID"),
-  reviewDocumentUrl: z.string().url("Invalid URL").refine(isValidReviewUrl, {
-    message: "Review document must be from Google Docs, Dropbox, Notion, Loom, or be a PDF link"
-  })
+  reviewContent: ReviewContentSchema,
 });
 
 export async function POST(req: NextRequest) {
@@ -43,7 +51,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { bookingId, reviewDocumentUrl } = UploadReviewSchema.parse(body);
+    const { bookingId, reviewContent } = UploadReviewSchema.parse(body);
+
+    // Validate supplemental URL if provided
+    if (reviewContent.supplementalDocUrl && !isValidSupplementalUrl(reviewContent.supplementalDocUrl)) {
+      return new Response(
+        JSON.stringify({
+          error: "Supplemental document must be from Google Docs, Dropbox, Notion, Loom, YouTube, Vimeo, or be a PDF link"
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     const supabase = createClient();
 
@@ -94,7 +112,7 @@ export async function POST(req: NextRequest) {
 
     // Check if the review is being uploaded past the deadline
     const turnaroundHours = booking.listing?.turnaround_hours || 48;
-    const acceptedAt = new Date(booking.review_accepted_at || booking.created_at);
+    const acceptedAt = new Date(booking.coach_accepted_at || booking.created_at);
     const deadline = new Date(acceptedAt.getTime() + turnaroundHours * 60 * 60 * 1000);
     const now = new Date();
     const isLate = now > deadline;
@@ -102,21 +120,21 @@ export async function POST(req: NextRequest) {
     if (isLate) {
       const hoursLate = Math.round((now.getTime() - deadline.getTime()) / (1000 * 60 * 60));
       console.warn(`⚠️ [POST /api/film-review/upload-review] Late submission: ${hoursLate} hours past deadline`);
-      // Allow submission but flag it - could be used for future refund policies
-      // For now, just log it. Business decision needed on whether to block late submissions.
     }
 
-    console.log(`✅ [POST /api/film-review/upload-review] Uploading review:`, {
+    console.log(`✅ [POST /api/film-review/upload-review] Uploading structured review:`, {
       bookingId,
-      reviewDocumentUrl: '[HIDDEN]',
-      athleteEmail: booking.athlete_email || booking.customer_email
+      athleteEmail: booking.athlete_email || booking.customer_email,
+      hasSupplementalDoc: !!reviewContent.supplementalDocUrl,
+      hasTimestamps: !!reviewContent.keyTimestamps
     });
 
-    // Update booking with review document
+    // Update booking with structured review content
     const { error: updateError } = await supabase
       .from("bookings")
       .update({
-        review_document_url: reviewDocumentUrl,
+        review_content: reviewContent,
+        review_document_url: reviewContent.supplementalDocUrl || null, // Keep for backward compatibility
         review_status: "completed",
         review_completed_at: new Date().toISOString()
       })
@@ -126,7 +144,7 @@ export async function POST(req: NextRequest) {
     if (updateError) {
       console.error(`❌ [POST /api/film-review/upload-review] Failed to update booking:`, updateError);
       return new Response(
-        JSON.stringify({ error: "Failed to upload review" }),
+        JSON.stringify({ error: `Failed to upload review: ${updateError.message}` }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
@@ -145,7 +163,7 @@ export async function POST(req: NextRequest) {
           listingTitle: booking.listing?.title || 'Film Review',
           turnaroundHours: booking.listing?.turnaround_hours || 48,
           priceCents: booking.amount_paid_cents,
-          reviewDocumentUrl: reviewDocumentUrl,
+          reviewDocumentUrl: reviewContent.supplementalDocUrl || undefined,
           appUrl: appUrl
         };
 

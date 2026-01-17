@@ -238,50 +238,74 @@ export default async function FilmReviewsPage() {
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {completed.map((booking) => (
-                <div
-                  key={booking.id}
-                  className="bg-white rounded-xl shadow-sm ring-1 ring-black/5 p-6"
-                >
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Completed
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        {booking.review_completed_at
-                          ? new Date(booking.review_completed_at).toLocaleDateString()
-                          : ""}
+              {completed.map((booking) => {
+                const reviewContent = booking.review_content as {
+                  overallAssessment?: string;
+                  strengths?: string;
+                  areasForImprovement?: string;
+                  recommendedDrills?: string;
+                  keyTimestamps?: string;
+                  supplementalDocUrl?: string;
+                } | null;
+
+                return (
+                  <div
+                    key={booking.id}
+                    className="bg-white rounded-xl shadow-sm ring-1 ring-black/5 p-6"
+                  >
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Completed
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          {booking.review_completed_at
+                            ? new Date(booking.review_completed_at).toLocaleDateString()
+                            : ""}
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-semibold text-[#123C7A]">
+                        {booking.listing?.title || "Film Review"}
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        For: {booking.athlete_email || booking.customer_email || "Unknown"}
+                      </p>
+                    </div>
+
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg mb-4">
+                      <span className="text-sm font-medium text-gray-700">Earned</span>
+                      <span className="text-lg font-bold text-green-600">
+                        ${(booking.amount_paid_cents / 100).toFixed(2)}
                       </span>
                     </div>
-                    <h3 className="text-lg font-semibold text-[#123C7A]">
-                      {booking.listing?.title || "Film Review"}
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      For: {booking.athlete_email || booking.customer_email || "Unknown"}
-                    </p>
-                  </div>
 
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg mb-4">
-                    <span className="text-sm font-medium text-gray-700">Earned</span>
-                    <span className="text-lg font-bold text-green-600">
-                      ${(booking.amount_paid_cents / 100).toFixed(2)}
-                    </span>
-                  </div>
+                    {/* Show structured content preview if available */}
+                    {reviewContent?.overallAssessment && (
+                      <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                        <p className="text-xs font-medium text-blue-800 mb-1">Review Summary:</p>
+                        <p className="text-sm text-gray-700 line-clamp-3">
+                          {reviewContent.overallAssessment.substring(0, 150)}...
+                        </p>
+                      </div>
+                    )}
 
-                  <a
-                    href={booking.review_document_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    View Review
-                  </a>
-                </div>
-              ))}
+                    {/* Show supplemental doc link if available */}
+                    {(reviewContent?.supplementalDocUrl || booking.review_document_url) && (
+                      <a
+                        href={reviewContent?.supplementalDocUrl || booking.review_document_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        View Supplemental Doc
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
