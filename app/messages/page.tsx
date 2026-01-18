@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { MessageWithSender } from '@/types/db';
 
@@ -18,7 +17,7 @@ interface ConversationWithLastMessage {
       full_name: string | null;
       avatar_url: string | null;
       role: string;
-    };
+    } | null;
   }>;
   lastMessage: MessageWithSender | null;
 }
@@ -29,160 +28,39 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadConversations() {
       try {
-        console.log('🔍 [Messages] Starting to load conversations...');
+        console.log('🔍 [Messages] Fetching conversations from API...');
 
-        // Get current user
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-          console.log('❌ [Messages] No user found, redirecting to login');
-          if (isMounted) router.push('/auth/login');
-          return;
-        }
+        const response = await fetch('/api/conversations');
+        const data = await response.json();
 
-        console.log('✅ [Messages] User authenticated:', user.email);
+        console.log('📋 [Messages] API response:', { status: response.status, hasData: !!data });
 
-        // Get user profile
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('id, full_name, role')
-          .eq('auth_user_id', user.id)
-          .single();
-
-        if (profileError || !profile) {
-          console.error('❌ [Messages] Profile error:', profileError);
-          if (isMounted) {
-            setError('Profile not found');
-            setLoading(false);
+        if (!response.ok) {
+          if (response.status === 401) {
+            console.log('❌ [Messages] Unauthorized, redirecting to login');
+            if (isMounted) router.push('/auth/login');
+            return;
           }
-          return;
+          throw new Error(data.error || 'Failed to load conversations');
         }
-
-        console.log('✅ [Messages] Profile loaded:', profile.full_name);
-        if (isMounted) setCurrentUser(profile);
-
-        // Get conversation IDs where user is a participant
-        console.log('🔍 [Messages] Fetching conversation_participants for user_id:', profile.id);
-        const { data: userConversations, error: userConvError } = await supabase
-          .from('conversation_participants')
-          .select('conversation_id')
-          .eq('user_id', profile.id);
-
-        console.log('📋 [Messages] conversation_participants result:', { data: userConversations, error: userConvError });
-
-        if (userConvError) {
-          console.error('❌ [Messages] Error getting user conversations:', userConvError);
-          if (isMounted) {
-            setError('Failed to load conversations');
-            setLoading(false);
-          }
-          return;
-        }
-
-        if (!userConversations?.length) {
-          console.log('ℹ️ [Messages] No conversations found for user');
-          if (isMounted) {
-            setConversations([]);
-            setLoading(false);
-          }
-          return;
-        }
-
-        const conversationIds = userConversations.map(uc => uc.conversation_id);
-        console.log('📋 [Messages] Found conversation IDs:', conversationIds);
-
-        // Get conversations with participants - simplified query to avoid FK issues
-        console.log('🔍 [Messages] Fetching conversations...');
-        const { data: conversationsData, error: conversationsError } = await supabase
-          .from('conversations')
-          .select('*')
-          .in('id', conversationIds)
-          .order('updated_at', { ascending: false });
-
-        if (conversationsError) {
-          console.error('❌ [Messages] Error fetching conversations:', conversationsError);
-          if (isMounted) {
-            setError('Failed to load conversations');
-            setLoading(false);
-          }
-          return;
-        }
-
-        console.log('✅ [Messages] Conversations loaded:', conversationsData?.length || 0);
-
-        // Get participants for each conversation separately
-        const conversationsWithParticipants = await Promise.all(
-          (conversationsData || []).map(async (conversation) => {
-            // Get participants
-            const { data: participants } = await supabase
-              .from('conversation_participants')
-              .select('user_id, role')
-              .eq('conversation_id', conversation.id);
-
-            // Get profile for each participant
-            const participantsWithProfiles = await Promise.all(
-              (participants || []).map(async (participant) => {
-                const { data: profileData } = await supabase
-                  .from('profiles')
-                  .select('id, full_name, avatar_url, role')
-                  .eq('id', participant.user_id)
-                  .single();
-
-                return {
-                  ...participant,
-                  profile: profileData
-                };
-              })
-            );
-
-            // Get last message
-            const { data: lastMessage } = await supabase
-              .from('messages')
-              .select('*')
-              .eq('conversation_id', conversation.id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-            // Get sender profile for last message
-            let lastMessageWithSender = null;
-            if (lastMessage) {
-              const { data: senderProfile } = await supabase
-                .from('profiles')
-                .select('id, full_name, avatar_url')
-                .eq('id', lastMessage.sender_id)
-                .single();
-
-              lastMessageWithSender = {
-                ...lastMessage,
-                sender: senderProfile
-              };
-            }
-
-            return {
-              ...conversation,
-              participants: participantsWithProfiles,
-              lastMessage: lastMessageWithSender as MessageWithSender | null,
-            };
-          })
-        );
 
         if (isMounted) {
-          setConversations(conversationsWithParticipants);
+          setCurrentUser(data.currentUser);
+          setConversations(data.conversations || []);
           setLoading(false);
         }
-        console.log('✅ [Messages] All data loaded successfully');
+        console.log('✅ [Messages] Loaded', data.conversations?.length || 0, 'conversations');
 
       } catch (err) {
-        console.error('❌ [Messages] Unexpected error:', err);
+        console.error('❌ [Messages] Error:', err);
         if (isMounted) {
-          setError('An unexpected error occurred');
+          setError(err instanceof Error ? err.message : 'An unexpected error occurred');
           setLoading(false);
         }
       }
