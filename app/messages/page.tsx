@@ -32,15 +32,17 @@ export default function MessagesPage() {
   const supabase = createClient();
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadConversations() {
       try {
         console.log('🔍 [Messages] Starting to load conversations...');
-        
+
         // Get current user
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
           console.log('❌ [Messages] No user found, redirecting to login');
-          router.push('/auth/login');
+          if (isMounted) router.push('/auth/login');
           return;
         }
 
@@ -55,99 +57,154 @@ export default function MessagesPage() {
 
         if (profileError || !profile) {
           console.error('❌ [Messages] Profile error:', profileError);
-          setError('Profile not found');
-          setLoading(false);
+          if (isMounted) {
+            setError('Profile not found');
+            setLoading(false);
+          }
           return;
         }
 
         console.log('✅ [Messages] Profile loaded:', profile.full_name);
-        setCurrentUser(profile);
+        if (isMounted) setCurrentUser(profile);
 
         // Get conversation IDs where user is a participant
+        console.log('🔍 [Messages] Fetching conversation_participants for user_id:', profile.id);
         const { data: userConversations, error: userConvError } = await supabase
           .from('conversation_participants')
           .select('conversation_id')
           .eq('user_id', profile.id);
 
+        console.log('📋 [Messages] conversation_participants result:', { data: userConversations, error: userConvError });
+
         if (userConvError) {
           console.error('❌ [Messages] Error getting user conversations:', userConvError);
-          setError('Failed to load conversations');
-          setLoading(false);
+          if (isMounted) {
+            setError('Failed to load conversations');
+            setLoading(false);
+          }
           return;
         }
 
         if (!userConversations?.length) {
           console.log('ℹ️ [Messages] No conversations found for user');
-          setConversations([]);
-          setLoading(false);
+          if (isMounted) {
+            setConversations([]);
+            setLoading(false);
+          }
           return;
         }
 
         const conversationIds = userConversations.map(uc => uc.conversation_id);
         console.log('📋 [Messages] Found conversation IDs:', conversationIds);
 
-        // Get conversations with participants
+        // Get conversations with participants - simplified query to avoid FK issues
+        console.log('🔍 [Messages] Fetching conversations...');
         const { data: conversationsData, error: conversationsError } = await supabase
           .from('conversations')
-          .select(`
-            *,
-            participants:conversation_participants(
-              user_id,
-              role,
-              profile:profiles!conversation_participants_user_id_fkey(
-                id,
-                full_name,
-                avatar_url,
-                role
-              )
-            )
-          `)
+          .select('*')
           .in('id', conversationIds)
           .order('updated_at', { ascending: false });
 
         if (conversationsError) {
           console.error('❌ [Messages] Error fetching conversations:', conversationsError);
-          setError('Failed to load conversations');
-          setLoading(false);
+          if (isMounted) {
+            setError('Failed to load conversations');
+            setLoading(false);
+          }
           return;
         }
 
         console.log('✅ [Messages] Conversations loaded:', conversationsData?.length || 0);
 
-        // Get the latest message for each conversation
-        const conversationsWithLastMessage = await Promise.all(
+        // Get participants for each conversation separately
+        const conversationsWithParticipants = await Promise.all(
           (conversationsData || []).map(async (conversation) => {
+            // Get participants
+            const { data: participants } = await supabase
+              .from('conversation_participants')
+              .select('user_id, role')
+              .eq('conversation_id', conversation.id);
+
+            // Get profile for each participant
+            const participantsWithProfiles = await Promise.all(
+              (participants || []).map(async (participant) => {
+                const { data: profileData } = await supabase
+                  .from('profiles')
+                  .select('id, full_name, avatar_url, role')
+                  .eq('id', participant.user_id)
+                  .single();
+
+                return {
+                  ...participant,
+                  profile: profileData
+                };
+              })
+            );
+
+            // Get last message
             const { data: lastMessage } = await supabase
               .from('messages')
-              .select(`
-                *,
-                sender:profiles!messages_sender_id_fkey(id, full_name, avatar_url)
-              `)
+              .select('*')
               .eq('conversation_id', conversation.id)
               .order('created_at', { ascending: false })
               .limit(1)
-              .single();
+              .maybeSingle();
+
+            // Get sender profile for last message
+            let lastMessageWithSender = null;
+            if (lastMessage) {
+              const { data: senderProfile } = await supabase
+                .from('profiles')
+                .select('id, full_name, avatar_url')
+                .eq('id', lastMessage.sender_id)
+                .single();
+
+              lastMessageWithSender = {
+                ...lastMessage,
+                sender: senderProfile
+              };
+            }
 
             return {
               ...conversation,
-              lastMessage: lastMessage as MessageWithSender | null,
+              participants: participantsWithProfiles,
+              lastMessage: lastMessageWithSender as MessageWithSender | null,
             };
           })
         );
 
-        setConversations(conversationsWithLastMessage);
-        setLoading(false);
+        if (isMounted) {
+          setConversations(conversationsWithParticipants);
+          setLoading(false);
+        }
         console.log('✅ [Messages] All data loaded successfully');
 
       } catch (err) {
         console.error('❌ [Messages] Unexpected error:', err);
-        setError('An unexpected error occurred');
-        setLoading(false);
+        if (isMounted) {
+          setError('An unexpected error occurred');
+          setLoading(false);
+        }
       }
     }
 
+    // Add a safety timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (isMounted && loading) {
+        console.error('⏱️ [Messages] Loading timeout - taking too long');
+        setError('Loading took too long. Please refresh the page.');
+        setLoading(false);
+      }
+    }, 15000);
+
     loadConversations();
-  }, [router]);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
