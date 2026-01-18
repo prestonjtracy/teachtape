@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { ChatThread } from '@/components/chat/ChatThread';
 import { ChatComposer } from '@/components/chat/ChatComposer';
 import Link from 'next/link';
@@ -31,111 +30,72 @@ export default function MessagePage({ params }: MessagePageProps) {
   });
   const [processingRequest, setProcessingRequest] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadConversationData() {
       try {
-        console.log('🔍 [Conversation] Loading conversation:', params.conversationId);
+        console.log('🔍 [Conversation] Fetching from API:', params.conversationId);
 
-        // Get current user
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-          console.log('❌ [Conversation] No user found, redirecting to login');
-          router.push('/auth/login');
-          return;
+        const response = await fetch(`/api/conversations/${params.conversationId}`);
+        const result = await response.json();
+
+        console.log('📋 [Conversation] API response:', { status: response.status });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            console.log('❌ [Conversation] Unauthorized, redirecting to login');
+            if (isMounted) router.push('/auth/login');
+            return;
+          }
+          throw new Error(result.error || 'Failed to load conversation');
         }
 
-        console.log('✅ [Conversation] User authenticated:', user.email);
-
-        // Get user profile
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('id, full_name, role')
-          .eq('auth_user_id', user.id)
-          .single();
-
-        if (profileError || !profile) {
-          console.error('❌ [Conversation] Profile error:', profileError);
-          setData(prev => ({ ...prev, error: 'Profile not found', loading: false }));
-          return;
+        if (isMounted) {
+          setData({
+            conversation: result.conversation,
+            currentUser: result.currentUser,
+            bookingRequest: result.bookingRequest,
+            loading: false,
+            error: null,
+          });
         }
 
-        console.log('✅ [Conversation] Profile loaded:', profile.full_name);
-
-        // Check if user is a participant in this conversation
-        const { data: participant, error: participantError } = await supabase
-          .from('conversation_participants')
-          .select('*')
-          .eq('conversation_id', params.conversationId)
-          .eq('user_id', profile.id)
-          .single();
-
-        if (participantError || !participant) {
-          console.error('❌ [Conversation] Not a participant:', participantError);
-          setData(prev => ({ ...prev, error: 'Conversation not found', loading: false }));
-          return;
-        }
-
-        console.log('✅ [Conversation] User is participant');
-
-        // Get conversation details with all participants
-        const { data: conversation, error: conversationError } = await supabase
-          .from('conversations')
-          .select(`
-            *,
-            participants:conversation_participants(
-              user_id,
-              role,
-              profile:profiles!conversation_participants_user_id_fkey(
-                id,
-                full_name,
-                avatar_url,
-                role
-              )
-            )
-          `)
-          .eq('id', params.conversationId)
-          .single();
-
-        if (conversationError || !conversation) {
-          console.error('❌ [Conversation] Error loading conversation:', conversationError);
-          setData(prev => ({ ...prev, error: 'Conversation not found', loading: false }));
-          return;
-        }
-
-        console.log('✅ [Conversation] Conversation loaded');
-
-        // Get related booking request if any
-        const { data: bookingRequest } = await supabase
-          .from('booking_requests')
-          .select(`
-            *,
-            listing:listings(title, price_cents, duration_minutes)
-          `)
-          .eq('conversation_id', params.conversationId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        console.log('✅ [Conversation] Booking request loaded:', bookingRequest ? 'found' : 'none');
-
-        setData({
-          conversation,
-          currentUser: profile,
-          bookingRequest,
-          loading: false,
-          error: null,
-        });
+        console.log('✅ [Conversation] Data loaded successfully');
 
       } catch (err) {
-        console.error('❌ [Conversation] Unexpected error:', err);
-        setData(prev => ({ ...prev, error: 'An unexpected error occurred', loading: false }));
+        console.error('❌ [Conversation] Error:', err);
+        if (isMounted) {
+          setData(prev => ({
+            ...prev,
+            error: err instanceof Error ? err.message : 'An unexpected error occurred',
+            loading: false
+          }));
+        }
       }
     }
 
+    // Add safety timeout
+    const timeoutId = setTimeout(() => {
+      if (isMounted && data.loading) {
+        console.error('⏱️ [Conversation] Loading timeout');
+        setData(prev => ({
+          ...prev,
+          error: 'Loading took too long. Please try again.',
+          loading: false
+        }));
+      }
+    }, 15000);
+
     loadConversationData();
-  }, [params.conversationId, router]);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.conversationId]);
 
   async function handleAcceptRequest() {
     if (!data.bookingRequest) return;
