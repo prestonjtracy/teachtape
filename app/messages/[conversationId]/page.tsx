@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChatThread } from '@/components/chat/ChatThread';
+import { ChatThread, ChatThreadRef } from '@/components/chat/ChatThread';
 import { ChatComposer } from '@/components/chat/ChatComposer';
 import Link from 'next/link';
 
@@ -21,6 +21,7 @@ interface ConversationData {
 }
 
 export default function MessagePage({ params }: MessagePageProps) {
+  const chatThreadRef = useRef<ChatThreadRef>(null);
   const [data, setData] = useState<ConversationData>({
     conversation: null,
     currentUser: null,
@@ -318,15 +319,20 @@ export default function MessagePage({ params }: MessagePageProps) {
       <div className="max-w-4xl mx-auto px-4 pb-4">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col" style={{ height: 'calc(100vh - 350px)', minHeight: '300px', maxHeight: '600px' }}>
           {/* Chat Messages */}
-          <ChatThread 
+          <ChatThread
+            ref={chatThreadRef}
             conversationId={params.conversationId}
             currentUserId={data.currentUser.id}
           />
-          
+
           {/* Message Input */}
-          <ChatComposer 
+          <ChatComposer
             conversationId={params.conversationId}
             placeholder={`Message ${otherParticipant?.full_name || 'participant'}...`}
+            onSendMessage={() => {
+              // Refresh messages after sending
+              chatThreadRef.current?.refreshMessages();
+            }}
           />
         </div>
       </div>

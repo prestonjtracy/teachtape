@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { MessageWithSender } from '@/types/db';
 import { cn } from '@/lib/utils';
@@ -11,42 +11,50 @@ interface ChatThreadProps {
   currentUserId: string;
 }
 
-export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
+export interface ChatThreadRef {
+  refreshMessages: () => Promise<void>;
+}
+
+export const ChatThread = forwardRef<ChatThreadRef, ChatThreadProps>(
+  function ChatThread({ conversationId, currentUserId }, ref) {
   const [messages, setMessages] = useState<MessageWithSender[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch messages function - extracted so it can be called externally
+  const fetchMessages = useCallback(async () => {
+    try {
+      console.log('🔍 [ChatThread] Fetching messages from API:', conversationId);
+
+      const response = await fetch(`/api/conversations/${conversationId}/messages`, {
+        credentials: 'include',
+      });
+      const result = await response.json();
+
+      console.log('📋 [ChatThread] API response:', { status: response.status });
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load messages');
+      }
+
+      setMessages(result.messages || []);
+      setLoading(false);
+      console.log('✅ [ChatThread] Loaded', result.messages?.length || 0, 'messages');
+    } catch (err) {
+      console.error('❌ [ChatThread] Error fetching messages:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load messages');
+      setLoading(false);
+    }
+  }, [conversationId]);
+
+  // Expose refreshMessages to parent component
+  useImperativeHandle(ref, () => ({
+    refreshMessages: fetchMessages
+  }), [fetchMessages]);
+
   useEffect(() => {
     const supabase = createClient();
     let isMounted = true;
-
-    // Fetch initial messages via API
-    async function fetchMessages() {
-      try {
-        console.log('🔍 [ChatThread] Fetching messages from API:', conversationId);
-
-        const response = await fetch(`/api/conversations/${conversationId}/messages`);
-        const result = await response.json();
-
-        console.log('📋 [ChatThread] API response:', { status: response.status });
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to load messages');
-        }
-
-        if (isMounted) {
-          setMessages(result.messages || []);
-          setLoading(false);
-        }
-        console.log('✅ [ChatThread] Loaded', result.messages?.length || 0, 'messages');
-      } catch (err) {
-        console.error('❌ [ChatThread] Error fetching messages:', err);
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Failed to load messages');
-          setLoading(false);
-        }
-      }
-    }
 
     fetchMessages();
 
@@ -62,31 +70,22 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         async (payload) => {
+          console.log('🔔 [ChatThread] Real-time message received:', payload);
           // Fetch all messages again via API to get sender info
-          // This ensures we have consistent data even with RLS policies
-          try {
-            const response = await fetch(`/api/conversations/${conversationId}/messages`);
-            const result = await response.json();
-
-            if (response.ok && isMounted) {
-              setMessages(result.messages || []);
-            }
-          } catch (err) {
-            console.error('Error fetching new message:', err);
-            // Fallback: add the message without sender info
-            if (isMounted) {
-              setMessages(prev => [...prev, payload.new as MessageWithSender]);
-            }
+          if (isMounted) {
+            await fetchMessages();
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 [ChatThread] Subscription status:', status);
+      });
 
     return () => {
       isMounted = false;
       supabase.removeChannel(channel);
     };
-  }, [conversationId]);
+  }, [conversationId, fetchMessages]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -630,4 +629,4 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
       })}
     </div>
   );
-}
+});
