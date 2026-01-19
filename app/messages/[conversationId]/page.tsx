@@ -33,6 +33,7 @@ export default function MessagePage({ params }: MessagePageProps) {
 
   useEffect(() => {
     let isMounted = true;
+    let hasLoaded = false;
 
     async function loadConversationData() {
       try {
@@ -52,6 +53,7 @@ export default function MessagePage({ params }: MessagePageProps) {
           throw new Error(result.error || 'Failed to load conversation');
         }
 
+        hasLoaded = true;
         if (isMounted) {
           setData({
             conversation: result.conversation,
@@ -66,6 +68,7 @@ export default function MessagePage({ params }: MessagePageProps) {
 
       } catch (err) {
         console.error('❌ [Conversation] Error:', err);
+        hasLoaded = true;
         if (isMounted) {
           setData(prev => ({
             ...prev,
@@ -76,9 +79,9 @@ export default function MessagePage({ params }: MessagePageProps) {
       }
     }
 
-    // Add safety timeout
+    // Add safety timeout - only triggers if data hasn't loaded yet
     const timeoutId = setTimeout(() => {
-      if (isMounted && data.loading) {
+      if (isMounted && !hasLoaded) {
         console.error('⏱️ [Conversation] Loading timeout');
         setData(prev => ({
           ...prev,
@@ -313,7 +316,7 @@ export default function MessagePage({ params }: MessagePageProps) {
 
       {/* Chat Interface */}
       <div className="max-w-4xl mx-auto px-4 pb-4">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col" style={{ height: '600px' }}>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col" style={{ height: 'calc(100vh - 350px)', minHeight: '300px', maxHeight: '600px' }}>
           {/* Chat Messages */}
           <ChatThread 
             conversationId={params.conversationId}
