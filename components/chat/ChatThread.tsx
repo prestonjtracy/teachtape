@@ -18,27 +18,33 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
 
   useEffect(() => {
     const supabase = createClient();
+    let isMounted = true;
 
-    // Fetch initial messages
+    // Fetch initial messages via API
     async function fetchMessages() {
       try {
-        const { data, error } = await supabase
-          .from('messages')
-          .select(`
-            *,
-            sender:profiles!messages_sender_id_fkey(id, full_name, avatar_url)
-          `)
-          .eq('conversation_id', conversationId)
-          .order('created_at', { ascending: true });
+        console.log('🔍 [ChatThread] Fetching messages from API:', conversationId);
 
-        if (error) throw error;
-        
-        setMessages(data || []);
-        setLoading(false);
+        const response = await fetch(`/api/conversations/${conversationId}/messages`);
+        const result = await response.json();
+
+        console.log('📋 [ChatThread] API response:', { status: response.status });
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to load messages');
+        }
+
+        if (isMounted) {
+          setMessages(result.messages || []);
+          setLoading(false);
+        }
+        console.log('✅ [ChatThread] Loaded', result.messages?.length || 0, 'messages');
       } catch (err) {
-        console.error('Error fetching messages:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load messages');
-        setLoading(false);
+        console.error('❌ [ChatThread] Error fetching messages:', err);
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load messages');
+          setLoading(false);
+        }
       }
     }
 
@@ -56,24 +62,28 @@ export function ChatThread({ conversationId, currentUserId }: ChatThreadProps) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         async (payload) => {
-          // Fetch the complete message with sender info
-          const { data } = await supabase
-            .from('messages')
-            .select(`
-              *,
-              sender:profiles!messages_sender_id_fkey(id, full_name, avatar_url)
-            `)
-            .eq('id', payload.new.id)
-            .single();
+          // Fetch all messages again via API to get sender info
+          // This ensures we have consistent data even with RLS policies
+          try {
+            const response = await fetch(`/api/conversations/${conversationId}/messages`);
+            const result = await response.json();
 
-          if (data) {
-            setMessages(prev => [...prev, data]);
+            if (response.ok && isMounted) {
+              setMessages(result.messages || []);
+            }
+          } catch (err) {
+            console.error('Error fetching new message:', err);
+            // Fallback: add the message without sender info
+            if (isMounted) {
+              setMessages(prev => [...prev, payload.new as MessageWithSender]);
+            }
           }
         }
       )
       .subscribe();
 
     return () => {
+      isMounted = false;
       supabase.removeChannel(channel);
     };
   }, [conversationId]);
