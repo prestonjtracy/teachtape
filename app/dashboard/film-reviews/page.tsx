@@ -60,52 +60,42 @@ export default function FilmReviewsPage() {
   });
   const router = useRouter();
 
-  useEffect(() => {
-    let isMounted = true;
+  const fetchFilmReviews = async () => {
+    try {
+      console.log('🔍 [FilmReviews] Fetching from API...');
 
-    async function fetchFilmReviews() {
-      try {
-        console.log('🔍 [FilmReviews] Fetching from API...');
+      const response = await fetch('/api/film-reviews');
+      const data = await response.json();
 
-        const response = await fetch('/api/film-reviews');
-        const data = await response.json();
+      console.log('📋 [FilmReviews] API response:', { status: response.status });
 
-        console.log('📋 [FilmReviews] API response:', { status: response.status });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            console.log('❌ [FilmReviews] Unauthorized, redirecting to login');
-            router.push('/auth/login');
-            return;
-          }
-          if (response.status === 403) {
-            console.log('❌ [FilmReviews] Not a coach, redirecting to dashboard');
-            router.push('/dashboard');
-            return;
-          }
-          throw new Error(data.error || 'Failed to load film reviews');
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.log('❌ [FilmReviews] Unauthorized, redirecting to login');
+          router.push('/auth/login');
+          return;
         }
-
-        if (isMounted) {
-          setCategorized(data.categorized);
-          setLoading(false);
+        if (response.status === 403) {
+          console.log('❌ [FilmReviews] Not a coach, redirecting to dashboard');
+          router.push('/dashboard');
+          return;
         }
-        console.log('✅ [FilmReviews] Loaded film reviews');
-
-      } catch (err) {
-        console.error('❌ [FilmReviews] Error:', err);
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : 'An unexpected error occurred');
-          setLoading(false);
-        }
+        throw new Error(data.error || 'Failed to load film reviews');
       }
+
+      setCategorized(data.categorized);
+      setLoading(false);
+      console.log('✅ [FilmReviews] Loaded film reviews');
+
+    } catch (err) {
+      console.error('❌ [FilmReviews] Error:', err);
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     fetchFilmReviews();
-
-    return () => {
-      isMounted = false;
-    };
   }, [router]);
 
   if (loading) {
@@ -281,7 +271,7 @@ export default function FilmReviewsPage() {
                       </div>
                     )}
 
-                    <UploadReviewForm bookingId={booking.id} />
+                    <UploadReviewForm bookingId={booking.id} onSuccess={fetchFilmReviews} />
                   </div>
                 );
               })}

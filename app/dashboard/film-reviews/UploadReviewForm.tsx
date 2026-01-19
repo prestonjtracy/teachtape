@@ -12,7 +12,12 @@ interface ReviewContent {
   supplementalDocUrl: string;
 }
 
-export default function UploadReviewForm({ bookingId }: { bookingId: string }) {
+interface UploadReviewFormProps {
+  bookingId: string;
+  onSuccess?: () => void;
+}
+
+export default function UploadReviewForm({ bookingId, onSuccess }: UploadReviewFormProps) {
   const [reviewContent, setReviewContent] = useState<ReviewContent>({
     overallAssessment: "",
     strengths: "",
@@ -78,7 +83,9 @@ export default function UploadReviewForm({ bookingId }: { bookingId: string }) {
 
       setSuccess(true);
       setTimeout(() => {
-        window.location.reload();
+        if (onSuccess) {
+          onSuccess();
+        }
       }, 2000);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
