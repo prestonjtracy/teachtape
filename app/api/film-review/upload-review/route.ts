@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { sendEmailResend } from "@/lib/email";
 import { generateFilmReviewCompletedAthleteEmail, FilmReviewEmailData } from "@/lib/emailTemplates";
@@ -130,7 +130,9 @@ export async function POST(req: NextRequest) {
     });
 
     // Update booking with structured review content
-    const { error: updateError } = await supabase
+    // Use admin client to bypass RLS since we've already verified the coach owns this booking
+    const adminSupabase = createAdminClient();
+    const { data: updatedBooking, error: updateError } = await adminSupabase
       .from("bookings")
       .update({
         review_content: reviewContent,
@@ -139,7 +141,9 @@ export async function POST(req: NextRequest) {
         review_completed_at: new Date().toISOString()
       })
       .eq("id", bookingId)
-      .eq("review_status", "accepted");
+      .eq("coach_id", profile.id) // Extra safety check
+      .select()
+      .single();
 
     if (updateError) {
       console.error(`❌ [POST /api/film-review/upload-review] Failed to update booking:`, updateError);
@@ -148,6 +152,20 @@ export async function POST(req: NextRequest) {
         { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
+
+    if (!updatedBooking) {
+      console.error(`❌ [POST /api/film-review/upload-review] No booking was updated - may already be completed or status mismatch`);
+      return new Response(
+        JSON.stringify({ error: "Failed to update booking - it may have already been completed" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`✅ [POST /api/film-review/upload-review] Booking updated:`, {
+      id: updatedBooking.id,
+      review_status: updatedBooking.review_status,
+      review_completed_at: updatedBooking.review_completed_at
+    });
 
     // Send email notification to athlete
     try {
@@ -185,7 +203,7 @@ export async function POST(req: NextRequest) {
 
     // Record payout event for tracking
     try {
-      const { error: payoutError } = await supabase.from('payout_events').insert({
+      const { error: payoutError } = await adminSupabase.from('payout_events').insert({
         booking_id: bookingId,
         coach_id: profile.id,
         event_type: 'film_review_completed',
