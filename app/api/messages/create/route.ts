@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { sanitizeText } from "@/lib/sanitization";
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs'; // Force Node.js runtime, not Edge
+
+// Simple text sanitization without DOMPurify (which can cause issues in edge runtime)
+function sanitizeMessageText(text: string): string {
+  return text
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .trim();
+}
 
 const CreateMessageSchema = z.object({
   conversation_id: z.string().uuid("Invalid conversation ID"),
   body: z.string()
     .min(1, "Message body is required")
-    .max(2000, "Message too long")
-    .transform(val => sanitizeText(val)), // XSS protection
+    .max(2000, "Message too long"),
   kind: z.string().default("text"),
 });
 
@@ -106,13 +113,16 @@ export async function POST(req: NextRequest) {
 
     console.log('✅ [POST /api/messages/create] User is participant in conversation');
 
+    // Sanitize the message body before inserting
+    const sanitizedBody = sanitizeMessageText(validatedData.body);
+
     // Create the message using admin client to bypass RLS
     const { data: message, error: messageError } = await adminSupabase
       .from('messages')
       .insert({
         conversation_id: validatedData.conversation_id,
         sender_id: profile.id,
-        body: validatedData.body,
+        body: sanitizedBody,
         kind: validatedData.kind
       })
       .select(`
