@@ -78,7 +78,7 @@ export default function UploadReviewForm({ bookingId }: { bookingId: string }) {
 
       setSuccess(true);
       setTimeout(() => {
-        router.refresh();
+        window.location.reload();
       }, 2000);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
