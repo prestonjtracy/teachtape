@@ -158,12 +158,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     let safetyTimeoutId: NodeJS.Timeout | null = null;
 
     console.log('🚀 [AuthContext] Initializing auth...');
+    console.log('🌐 [AuthContext] Current URL:', typeof window !== 'undefined' ? window.location.href : 'SSR');
 
     // Safety timeout - if auth hasn't resolved in 10 seconds, stop loading
     // This prevents the infinite loading state but gives enough time for auth to complete
-    safetyTimeoutId = setTimeout(() => {
+    safetyTimeoutId = setTimeout(async () => {
       if (isMounted && loading) {
         console.warn('⚠️ [AuthContext] Safety timeout reached (10s) - forcing loading to false');
+        // Debug: try to get session directly to see what's happening
+        try {
+          const { data, error } = await supabase.auth.getSession();
+          console.log('🔍 [AuthContext] Timeout debug - getSession:', {
+            hasSession: !!data.session,
+            error: error?.message,
+            userId: data.session?.user?.id?.substring(0, 8)
+          });
+        } catch (e) {
+          console.error('🔍 [AuthContext] Timeout debug - getSession error:', e);
+        }
         setLoading(false);
         setInitialized(true);
       }
