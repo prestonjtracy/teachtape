@@ -67,61 +67,50 @@ export default function MyProfileClient({ initialUser, initialProfile }: MyProfi
     let isMounted = true;
 
     async function loadUser() {
-      console.log('[MyProfile] Starting loadUser...');
+      console.log('[MyProfile] Starting loadUser via API...');
       try {
         if (!isMounted) {
           console.log('[MyProfile] Component unmounted before starting');
           return;
         }
 
-        console.log('[MyProfile] Calling supabase.auth.getUser()...');
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        console.log('[MyProfile] getUser result:', { userId: user?.id, error: authError?.message });
+        // Use server-side API to avoid RLS issues
+        console.log('[MyProfile] Fetching from /api/profile...');
+        const response = await fetch('/api/profile');
+        const result = await response.json();
+
+        console.log('[MyProfile] API response:', { status: response.status });
 
         if (!isMounted) {
-          console.log('[MyProfile] Component unmounted after getUser');
+          console.log('[MyProfile] Component unmounted after fetch');
           return;
         }
 
-        if (authError) {
-          console.error('[MyProfile] Auth error:', authError);
+        if (!response.ok) {
+          if (response.status === 401) {
+            console.log('[MyProfile] Unauthorized');
+            setInitialLoading(false);
+            return;
+          }
+          console.error('[MyProfile] API error:', result.error);
           setInitialLoading(false);
           return;
         }
 
-        setUser(user);
+        setUser(result.user);
 
-        if (user) {
-          console.log('[MyProfile] Fetching profile for user:', user.id);
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('auth_user_id', user.id)
-            .single();
-
-          console.log('[MyProfile] Profile result:', { profileId: profile?.id, error: profileError?.message });
-
-          if (!isMounted) {
-            console.log('[MyProfile] Component unmounted after profile fetch');
-            return;
-          }
-
-          if (profileError && profileError.code !== 'PGRST116') {
-            console.error('[MyProfile] Profile error:', profileError);
-          }
-
-          if (profile) {
-            setProfile(profile);
-            setFormData({
-              full_name: profile.full_name || '',
-              role: profile.role || 'coach',
-              bio: profile.bio || '',
-              sport: profile.sport || '',
-              avatar_url: profile.avatar_url || ''
-            });
-          }
+        if (result.profile) {
+          console.log('[MyProfile] Profile loaded:', result.profile.full_name);
+          setProfile(result.profile);
+          setFormData({
+            full_name: result.profile.full_name || '',
+            role: result.profile.role || 'coach',
+            bio: result.profile.bio || '',
+            sport: result.profile.sport || '',
+            avatar_url: result.profile.avatar_url || ''
+          });
         } else {
-          console.log('[MyProfile] No user found after getUser call');
+          console.log('[MyProfile] No profile found for user');
         }
       } catch (error) {
         console.error('[MyProfile] Load user error:', error);
@@ -132,12 +121,12 @@ export default function MyProfileClient({ initialUser, initialProfile }: MyProfi
         }
       }
     }
-    
+
     if (!initialUser) {
       setInitialLoading(true);
       loadUser();
     }
-    
+
     return () => {
       isMounted = false;
     };
