@@ -170,21 +170,24 @@ export async function middleware(request: NextRequest) {
       )
     }
 
-    // Add rate limit headers and CORS headers to successful responses for API routes
-    const response = NextResponse.next()
-    response.headers.set('X-RateLimit-Limit', String(rateLimitResult.limit))
-    response.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining))
-    response.headers.set('X-RateLimit-Reset', String(rateLimitResult.reset))
+    // For API routes, also update the session to maintain auth state
+    // This is critical - without this, sessions expire and users get logged out
+    const supabaseResponse = await updateSession(request)
+
+    // Add rate limit headers
+    supabaseResponse.headers.set('X-RateLimit-Limit', String(rateLimitResult.limit))
+    supabaseResponse.headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining))
+    supabaseResponse.headers.set('X-RateLimit-Reset', String(rateLimitResult.reset))
 
     // Add CORS headers for browser requests
     if (origin) {
       const corsHeaders = getCorsHeaders(origin)
       Object.entries(corsHeaders).forEach(([key, value]) => {
-        response.headers.set(key, value)
+        supabaseResponse.headers.set(key, value)
       })
     }
 
-    return response
+    return supabaseResponse
   }
 
   // For all non-API routes, use Supabase session refresh
