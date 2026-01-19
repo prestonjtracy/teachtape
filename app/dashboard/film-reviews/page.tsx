@@ -1,9 +1,36 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import AcceptDeclineButtons from "./AcceptDeclineButtons";
 import UploadReviewForm from "./UploadReviewForm";
 
-export const dynamic = "force-dynamic";
+interface Booking {
+  id: string;
+  created_at: string;
+  athlete_email: string | null;
+  customer_email: string | null;
+  athlete_notes: string | null;
+  film_url: string | null;
+  amount_paid_cents: number;
+  review_status: string | null;
+  review_completed_at: string | null;
+  review_content: any;
+  review_document_url: string | null;
+  deadline_at: string | null;
+  coach_accepted_at: string | null;
+  listing: {
+    title: string;
+    turnaround_hours: number | null;
+  } | null;
+}
+
+interface CategorizedBookings {
+  pending: Booking[];
+  accepted: Booking[];
+  completed: Booking[];
+  declined: Booking[];
+}
 
 function formatTimeRemaining(deadline: string): string {
   const now = new Date();
@@ -22,60 +49,96 @@ function formatTimeRemaining(deadline: string): string {
   return `${days}d ${remainingHours}h remaining`;
 }
 
-export default async function FilmReviewsPage() {
-  const supabase = createClient();
+export default function FilmReviewsPage() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [categorized, setCategorized] = useState<CategorizedBookings>({
+    pending: [],
+    accepted: [],
+    completed: [],
+    declined: []
+  });
+  const router = useRouter();
 
-  // Check if user is authenticated
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    redirect("/auth/login");
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchFilmReviews() {
+      try {
+        console.log('🔍 [FilmReviews] Fetching from API...');
+
+        const response = await fetch('/api/film-reviews');
+        const data = await response.json();
+
+        console.log('📋 [FilmReviews] API response:', { status: response.status });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            console.log('❌ [FilmReviews] Unauthorized, redirecting to login');
+            router.push('/auth/login');
+            return;
+          }
+          if (response.status === 403) {
+            console.log('❌ [FilmReviews] Not a coach, redirecting to dashboard');
+            router.push('/dashboard');
+            return;
+          }
+          throw new Error(data.error || 'Failed to load film reviews');
+        }
+
+        if (isMounted) {
+          setCategorized(data.categorized);
+          setLoading(false);
+        }
+        console.log('✅ [FilmReviews] Loaded film reviews');
+
+      } catch (err) {
+        console.error('❌ [FilmReviews] Error:', err);
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchFilmReviews();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FF5A1F] mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading film reviews...</p>
+        </div>
+      </div>
+    );
   }
-
-  // Get user profile
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, role, full_name')
-    .eq('auth_user_id', user.id)
-    .single();
-
-  if (profileError || !profile) {
-    redirect("/auth/login");
-  }
-
-  // Only coaches can access this page
-  if (profile.role !== 'coach') {
-    redirect("/dashboard");
-  }
-
-  // Fetch film review bookings for this coach with athlete info
-  const { data: bookings, error } = await supabase
-    .from("bookings")
-    .select(`
-      *,
-      listing:listings(title, turnaround_hours)
-    `)
-    .eq("booking_type", "film_review")
-    .eq("coach_id", profile.id)
-    .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Error loading film reviews:", error);
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Film Reviews</h1>
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-700">Failed to load film reviews. Please try again.</p>
+            <p className="text-red-700">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-2 text-sm text-red-600 underline"
+            >
+              Try again
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  const pending = bookings?.filter((b) => b.review_status === "pending_acceptance") || [];
-  const accepted = bookings?.filter((b) => b.review_status === "accepted") || [];
-  const completed = bookings?.filter((b) => b.review_status === "completed") || [];
-  const declined = bookings?.filter((b) => b.review_status === "declined") || [];
+  const { pending, accepted, completed, declined } = categorized;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -196,7 +259,7 @@ export default async function FilmReviewsPage() {
 
                     <div className="mb-4">
                       <a
-                        href={booking.film_url}
+                        href={booking.film_url || '#'}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center px-4 py-2 bg-[#123C7A] text-white text-sm font-medium rounded-lg hover:bg-[#0d2d5f] transition-colors"
@@ -292,7 +355,7 @@ export default async function FilmReviewsPage() {
                     {/* Show supplemental doc link if available */}
                     {(reviewContent?.supplementalDocUrl || booking.review_document_url) && (
                       <a
-                        href={reviewContent?.supplementalDocUrl || booking.review_document_url}
+                        href={reviewContent?.supplementalDocUrl || booking.review_document_url || '#'}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
