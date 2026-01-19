@@ -155,18 +155,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Initialize auth and set up listener - run once on mount
   useEffect(() => {
     let isMounted = true;
+    let safetyTimeoutId: NodeJS.Timeout | null = null;
 
     console.log('🚀 [AuthContext] Initializing auth...');
 
-    // Safety timeout - if auth hasn't resolved in 5 seconds, stop loading
-    // This prevents the infinite loading state
-    const safetyTimeout = setTimeout(() => {
+    // Safety timeout - if auth hasn't resolved in 10 seconds, stop loading
+    // This prevents the infinite loading state but gives enough time for auth to complete
+    safetyTimeoutId = setTimeout(() => {
       if (isMounted && loading) {
-        console.warn('⚠️ [AuthContext] Safety timeout reached - forcing loading to false');
+        console.warn('⚠️ [AuthContext] Safety timeout reached (10s) - forcing loading to false');
         setLoading(false);
         setInitialized(true);
       }
-    }, 5000);
+    }, 10000);
+
+    // Helper to clear the safety timeout when auth completes normally
+    const clearSafetyTimeout = () => {
+      if (safetyTimeoutId) {
+        clearTimeout(safetyTimeoutId);
+        safetyTimeoutId = null;
+      }
+    };
 
     // Set up auth state listener FIRST - this is the primary way we get auth state
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -200,6 +209,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         // ONLY set loading false AFTER profile is fetched
         if (isMounted) {
+          clearSafetyTimeout();
           setLoading(false);
           setInitialized(true);
           console.log('✅ [AuthContext] Initialization complete');
@@ -215,6 +225,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Only handle the "no session" case here - if there's a session, onAuthStateChange handles it
       if (isMounted && !session && !error) {
         console.log('ℹ️ [AuthContext] No session found, marking as initialized');
+        clearSafetyTimeout();
         setLoading(false);
         setInitialized(true);
       }
@@ -222,6 +233,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (error) {
         console.error('❌ [AuthContext] getSession error:', error);
         if (isMounted) {
+          clearSafetyTimeout();
           setLoading(false);
           setInitialized(true);
         }
@@ -229,6 +241,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }).catch(err => {
       console.error('❌ [AuthContext] getSession exception:', err);
       if (isMounted) {
+        clearSafetyTimeout();
         setLoading(false);
         setInitialized(true);
       }
@@ -236,7 +249,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return () => {
       isMounted = false;
-      clearTimeout(safetyTimeout);
+      clearSafetyTimeout();
       console.log('🧹 [AuthContext] Cleaning up auth listener');
       subscription.unsubscribe();
     };
