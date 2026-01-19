@@ -130,13 +130,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signOut = useCallback(async () => {
     try {
       console.log('🚪 [AuthContext] Signing out...');
-      await supabase.auth.signOut();
+      const { error: signOutError } = await supabase.auth.signOut();
+
+      if (signOutError) {
+        console.error('❌ [AuthContext] Supabase signOut error:', signOutError);
+        throw signOutError;
+      }
+
       setUser(null);
       setProfile(null);
       setError(null);
+
+      console.log('✅ [AuthContext] Sign out successful, redirecting to home...');
+      // Force a full page navigation to clear all cached state
+      window.location.href = '/';
     } catch (err) {
       console.error('❌ [AuthContext] Sign out error:', err);
       setError(err instanceof Error ? err.message : 'Sign out failed');
+      // Even on error, try to redirect to clear state
+      window.location.href = '/';
     }
   }, [supabase]);
 
