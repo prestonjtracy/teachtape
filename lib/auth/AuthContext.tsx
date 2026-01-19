@@ -40,244 +40,155 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
 
   // Memoize supabase client to prevent recreation on each render
   const supabase = useMemo(() => createClient(), []);
 
-  const fetchProfile = useCallback(async (userId: string, retryCount = 0): Promise<Profile | null> => {
-    console.log('🔍 [AuthContext] Fetching profile via API for userId:', userId, retryCount > 0 ? `(retry ${retryCount})` : '');
+  const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
+    console.log('🔍 [AuthContext] Fetching profile for userId:', userId);
 
     try {
-      // Use server-side API to fetch profile - this bypasses client-side RLS issues
       const response = await fetch('/api/auth/profile', {
         method: 'GET',
-        credentials: 'include', // Important: include cookies for auth
+        credentials: 'include',
       });
-
-      console.log('📋 [AuthContext] API response status:', response.status);
 
       if (!response.ok) {
         console.error('❌ [AuthContext] Profile API error:', response.status);
-        if (retryCount < 2) {
-          console.log('🔄 [AuthContext] Retrying profile fetch in 500ms...');
-          await new Promise(resolve => setTimeout(resolve, 500));
-          return fetchProfile(userId, retryCount + 1);
-        }
         return null;
       }
 
       const data = await response.json();
-      console.log('📋 [AuthContext] Profile API response:', data);
-
       if (data.profile) {
-        console.log('✅ [AuthContext] Profile fetched successfully:', data.profile.full_name, 'role:', data.profile.role);
+        console.log('✅ [AuthContext] Profile fetched:', data.profile.full_name);
         return data.profile;
       }
-
-      // Profile not found - retry a couple times in case it's being created
-      if (retryCount < 2) {
-        console.log('🔄 [AuthContext] No profile found, retrying in 500ms...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return fetchProfile(userId, retryCount + 1);
-      }
-
-      console.log('ℹ️ [AuthContext] No profile found after retries');
       return null;
     } catch (err) {
-      console.error('❌ [AuthContext] Profile fetch exception:', err);
-      if (retryCount < 2) {
-        console.log('🔄 [AuthContext] Retrying profile fetch in 500ms...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return fetchProfile(userId, retryCount + 1);
-      }
+      console.error('❌ [AuthContext] Profile fetch error:', err);
       return null;
     }
   }, []);
 
   const refreshAuth = useCallback(async () => {
     try {
-      console.log('🔄 [AuthContext] Refreshing auth state...');
-      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError) {
-        console.error('❌ [AuthContext] Auth refresh error:', userError);
-        setError(userError.message);
-        setUser(null);
-        setProfile(null);
-        return;
-      }
-
-      console.log('👤 [AuthContext] User:', currentUser ? 'authenticated' : 'not authenticated');
+      console.log('🔄 [AuthContext] Refreshing auth...');
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
       setUser(currentUser);
-      setError(null);
 
       if (currentUser) {
         const profileData = await fetchProfile(currentUser.id);
         setProfile(profileData);
-        console.log('✅ [AuthContext] Profile loaded:', profileData?.full_name || 'No name', 'Role:', profileData?.role);
       } else {
         setProfile(null);
       }
     } catch (err) {
-      console.error('❌ [AuthContext] Auth refresh failed:', err);
-      setError(err instanceof Error ? err.message : 'Auth refresh failed');
-      setUser(null);
-      setProfile(null);
+      console.error('❌ [AuthContext] Refresh error:', err);
     }
   }, [supabase, fetchProfile]);
 
   const signOut = useCallback(async () => {
     try {
       console.log('🚪 [AuthContext] Signing out...');
-      const { error: signOutError } = await supabase.auth.signOut();
-
-      if (signOutError) {
-        console.error('❌ [AuthContext] Supabase signOut error:', signOutError);
-        throw signOutError;
-      }
-
+      await supabase.auth.signOut();
       setUser(null);
       setProfile(null);
-      setError(null);
-
-      console.log('✅ [AuthContext] Sign out successful, redirecting to home...');
-      // Force a full page navigation to clear all cached state
       window.location.href = '/';
     } catch (err) {
       console.error('❌ [AuthContext] Sign out error:', err);
-      setError(err instanceof Error ? err.message : 'Sign out failed');
-      // Even on error, try to redirect to clear state
       window.location.href = '/';
     }
   }, [supabase]);
 
-  // Initialize auth and set up listener - run once on mount
+  // Initialize auth on mount
   useEffect(() => {
     let isMounted = true;
-    let safetyTimeoutId: NodeJS.Timeout | null = null;
+    let loadingResolved = false;
+    console.log('🚀 [AuthContext] Initializing...');
 
-    console.log('🚀 [AuthContext] Initializing auth...');
-    console.log('🌐 [AuthContext] Current URL:', typeof window !== 'undefined' ? window.location.href : 'SSR');
-
-    // Safety timeout - if auth hasn't resolved in 10 seconds, stop loading
-    // This prevents the infinite loading state but gives enough time for auth to complete
-    safetyTimeoutId = setTimeout(async () => {
-      if (isMounted && loading) {
-        console.warn('⚠️ [AuthContext] Safety timeout reached (10s) - forcing loading to false');
-        // Debug: try to get session directly to see what's happening
-        try {
-          const { data, error } = await supabase.auth.getSession();
-          console.log('🔍 [AuthContext] Timeout debug - getSession:', {
-            hasSession: !!data.session,
-            error: error?.message,
-            userId: data.session?.user?.id?.substring(0, 8)
-          });
-        } catch (e) {
-          console.error('🔍 [AuthContext] Timeout debug - getSession error:', e);
-        }
+    const resolveLoading = () => {
+      if (!loadingResolved && isMounted) {
+        loadingResolved = true;
         setLoading(false);
-        setInitialized(true);
-      }
-    }, 10000);
-
-    // Helper to clear the safety timeout when auth completes normally
-    const clearSafetyTimeout = () => {
-      if (safetyTimeoutId) {
-        clearTimeout(safetyTimeoutId);
-        safetyTimeoutId = null;
+        console.log('✅ [AuthContext] Loading resolved');
       }
     };
 
-    // Set up auth state listener FIRST - this is the primary way we get auth state
+    // Force loading to false after 2 seconds - shorter timeout for better UX
+    const forceTimeout = setTimeout(() => {
+      console.warn('⚠️ [AuthContext] Force timeout - setting loading false');
+      resolveLoading();
+    }, 2000);
+
+    // Primary method: directly get session on mount
+    const initializeAuth = async () => {
+      try {
+        console.log('📋 [AuthContext] Getting session...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error('❌ [AuthContext] getSession error:', error);
+        } else {
+          console.log('📋 [AuthContext] Session result:', session ? 'found' : 'none');
+
+          if (session?.user) {
+            console.log('👤 [AuthContext] User:', session.user.email);
+            setUser(session.user);
+
+            // Fetch profile in background
+            fetchProfile(session.user.id).then(profileData => {
+              if (isMounted) setProfile(profileData);
+            });
+          } else {
+            setUser(null);
+            setProfile(null);
+          }
+        }
+
+        clearTimeout(forceTimeout);
+        resolveLoading();
+      } catch (err) {
+        console.error('❌ [AuthContext] Init error:', err);
+        clearTimeout(forceTimeout);
+        resolveLoading();
+      }
+    };
+
+    initializeAuth();
+
+    // Also listen for auth changes (sign in, sign out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('🔄 [AuthContext] Auth event:', event);
+
         if (!isMounted) return;
 
-        console.log('🔄 [AuthContext] Auth state changed:', event, session?.user ? 'user present' : 'no user');
-
-        // Update user immediately
-        setUser(session?.user ?? null);
-        setError(null);
-
         if (session?.user) {
-          // Fetch profile - this is critical, so we wait for it
-          console.log('🔍 [AuthContext] Fetching profile for userId:', session.user.id);
-          try {
-            const profileData = await fetchProfile(session.user.id);
-            if (isMounted) {
-              setProfile(profileData);
-              console.log('✅ [AuthContext] Profile loaded:', profileData?.full_name || 'No profile found');
-            }
-          } catch (err) {
-            console.error('❌ [AuthContext] Profile fetch error in listener:', err);
-            if (isMounted) {
-              setProfile(null);
-            }
-          }
+          setUser(session.user);
+          fetchProfile(session.user.id).then(profileData => {
+            if (isMounted) setProfile(profileData);
+          });
         } else {
+          setUser(null);
           setProfile(null);
         }
 
-        // ONLY set loading false AFTER profile is fetched
-        if (isMounted) {
-          clearSafetyTimeout();
-          setLoading(false);
-          setInitialized(true);
-          console.log('✅ [AuthContext] Initialization complete');
-        }
+        // Resolve loading if still pending
+        clearTimeout(forceTimeout);
+        resolveLoading();
       }
     );
 
-    // Trigger initial session check
-    // Note: getSession() will cause onAuthStateChange to fire with INITIAL_SESSION
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      console.log('📋 [AuthContext] getSession result:', session ? 'session exists' : 'no session', error?.message || '');
-
-      // Only handle the "no session" case here - if there's a session, onAuthStateChange handles it
-      if (isMounted && !session && !error) {
-        console.log('ℹ️ [AuthContext] No session found, marking as initialized');
-        clearSafetyTimeout();
-        setLoading(false);
-        setInitialized(true);
-      }
-
-      if (error) {
-        console.error('❌ [AuthContext] getSession error:', error);
-        if (isMounted) {
-          clearSafetyTimeout();
-          setLoading(false);
-          setInitialized(true);
-        }
-      }
-    }).catch(err => {
-      console.error('❌ [AuthContext] getSession exception:', err);
-      if (isMounted) {
-        clearSafetyTimeout();
-        setLoading(false);
-        setInitialized(true);
-      }
-    });
-
     return () => {
       isMounted = false;
-      clearSafetyTimeout();
-      console.log('🧹 [AuthContext] Cleaning up auth listener');
+      clearTimeout(forceTimeout);
       subscription.unsubscribe();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase, fetchProfile]);
 
-  const value: AuthContextType = {
-    user,
-    profile,
-    loading,
-    error,
-    signOut,
-    refreshAuth,
-  };
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ user, profile, loading, error, signOut, refreshAuth }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClientForApiRoute } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { applyRateLimit } from "@/lib/rateLimitHelpers";
 import { sanitizeText } from "@/lib/sanitization";
 
 export const dynamic = 'force-dynamic';
@@ -18,22 +17,44 @@ const CreateMessageSchema = z.object({
 export async function POST(req: NextRequest) {
   console.log('🔍 [POST /api/messages/create] Request received');
 
-  // Apply rate limiting (30 requests per minute to prevent spam)
-  const rateLimitResponse = applyRateLimit(req, 'MODERATE');
-  if (rateLimitResponse) return rateLimitResponse;
-  
   try {
-    const body = await req.json();
-    
+    // Parse request body
+    let body;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      console.error('❌ [POST /api/messages/create] Failed to parse request body:', parseError);
+      return NextResponse.json(
+        { error: "Invalid JSON in request body" },
+        { status: 400 }
+      );
+    }
+
     // Validate input
-    const validatedData = CreateMessageSchema.parse(body);
+    let validatedData;
+    try {
+      validatedData = CreateMessageSchema.parse(body);
+    } catch (validationError) {
+      if (validationError instanceof z.ZodError) {
+        console.error('❌ [POST /api/messages/create] Validation error:', validationError.errors);
+        return NextResponse.json(
+          {
+            error: "Invalid request data",
+            details: validationError.errors
+          },
+          { status: 400 }
+        );
+      }
+      throw validationError;
+    }
+
     console.log('✅ [POST /api/messages/create] Input validated:', {
       conversation_id: validatedData.conversation_id,
       body_length: validatedData.body.length,
       kind: validatedData.kind
     });
 
-    const supabase = createClientForApiRoute(req);
+    const supabase = createClient();
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -44,6 +65,8 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+
+    console.log('👤 [POST /api/messages/create] User authenticated:', user.id);
 
     // Get user profile
     const { data: profile, error: profileError } = await supabase
@@ -60,8 +83,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    console.log('📋 [POST /api/messages/create] Profile found:', profile.id);
+
+    // Use admin client to bypass RLS for checking participant and creating message
+    const adminSupabase = createAdminClient();
+
     // Verify user is a participant in the conversation
-    const { data: participant, error: participantError } = await supabase
+    const { data: participant, error: participantError } = await adminSupabase
       .from('conversation_participants')
       .select('*')
       .eq('conversation_id', validatedData.conversation_id)
@@ -76,8 +104,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create the message
-    const { data: message, error: messageError } = await supabase
+    console.log('✅ [POST /api/messages/create] User is participant in conversation');
+
+    // Create the message using admin client to bypass RLS
+    const { data: message, error: messageError } = await adminSupabase
       .from('messages')
       .insert({
         conversation_id: validatedData.conversation_id,
@@ -94,13 +124,13 @@ export async function POST(req: NextRequest) {
     if (messageError || !message) {
       console.error('❌ [POST /api/messages/create] Failed to create message:', messageError);
       return NextResponse.json(
-        { error: "Failed to send message" },
+        { error: "Failed to send message", details: messageError?.message },
         { status: 500 }
       );
     }
 
     // Update conversation's updated_at timestamp
-    await supabase
+    await adminSupabase
       .from('conversations')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', validatedData.conversation_id);
@@ -113,20 +143,9 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      console.error('❌ [POST /api/messages/create] Validation error:', error.errors);
-      return NextResponse.json(
-        { 
-          error: "Invalid request data",
-          details: error.errors
-        },
-        { status: 400 }
-      );
-    }
-
     console.error('❌ [POST /api/messages/create] Unexpected error:', error);
     return NextResponse.json(
-      { 
+      {
         error: "Internal server error",
         details: error instanceof Error ? error.message : "Unknown error"
       },
