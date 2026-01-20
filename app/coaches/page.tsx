@@ -66,15 +66,22 @@ export default async function CoachesPage() {
         listings:listings(id, title, price_cents, is_active),
         reviews:reviews(rating)
       `)
-      .eq("role", "coach")
-      .eq("listings.is_active", true);
+      .eq("role", "coach");
 
     if (error) throw error;
 
-    // Get unique sports for filter
-    const sports = [...new Set(profiles?.filter(p => p.sport).map(p => p.sport) || [])];
+    // Filter to only show coaches with active listings, and filter their listings
+    const coachesWithActiveListings = (profiles || [])
+      .map(profile => ({
+        ...profile,
+        listings: (profile.listings || []).filter((l: any) => l.is_active)
+      }))
+      .filter(profile => profile.listings.length > 0);
 
-    if (!profiles || profiles.length === 0) {
+    // Get unique sports for filter
+    const sports = [...new Set(coachesWithActiveListings?.filter(p => p.sport).map(p => p.sport) || [])];
+
+    if (!coachesWithActiveListings || coachesWithActiveListings.length === 0) {
       return (
         <div className="min-h-screen bg-[#F8FAFC]">
           {/* Hero Section */}
@@ -170,7 +177,7 @@ export default async function CoachesPage() {
           {/* Results Count */}
           <div className="flex items-center justify-between mb-6">
             <p className="text-gray-600">
-              <span className="font-semibold text-gray-900">{profiles.length}</span> coach{profiles.length !== 1 ? 'es' : ''} available
+              <span className="font-semibold text-gray-900">{coachesWithActiveListings.length}</span> coach{coachesWithActiveListings.length !== 1 ? 'es' : ''} available
             </p>
             <select className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#F45A14]">
               <option>Sort by: Recommended</option>
@@ -182,7 +189,7 @@ export default async function CoachesPage() {
 
           {/* Coaches Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {profiles.map((profile: Profile) => {
+            {coachesWithActiveListings.map((profile: Profile) => {
               const avgRating = getAverageRating(profile.reviews);
               const reviewCount = profile.reviews?.length || 0;
               const lowestPrice = profile.listings && profile.listings.length > 0
@@ -278,7 +285,7 @@ export default async function CoachesPage() {
           </div>
 
           {/* Load More */}
-          {profiles.length >= 6 && (
+          {coachesWithActiveListings.length >= 6 && (
             <div className="mt-12 text-center">
               <button className="px-8 py-3 bg-white border-2 border-[#123C7A] text-[#123C7A] font-semibold rounded-xl hover:bg-[#123C7A] hover:text-white transition-colors">
                 Load More Coaches
