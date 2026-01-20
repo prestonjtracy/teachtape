@@ -9,7 +9,7 @@ export interface UserProfile {
 
 export async function getCurrentUserProfile(): Promise<UserProfile | null> {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();

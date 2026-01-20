@@ -58,7 +58,7 @@ function StarRating({ rating, reviewCount }: { rating: number; reviewCount: numb
 
 export default async function CoachesPage() {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: profiles, error } = await supabase
       .from("profiles")
       .select(`

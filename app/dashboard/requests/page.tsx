@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import AthleteRequestsList from "@/components/dashboard/AthleteRequestsList";
 
 export default async function AthleteRequestsPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   // Check if user is authenticated
   const { data: { user }, error: authError } = await supabase.auth.getUser();

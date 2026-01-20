@@ -43,7 +43,7 @@ export interface CoachProfile {
 
 // Helper functions
 export async function validateCoachAuth(): Promise<{ profile: CoachProfile; error?: string; status?: number }> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Get current user
   const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -99,7 +99,7 @@ export async function validateFileUpload(file: File): Promise<{ error?: string; 
 }
 
 export async function checkGalleryLimit(coachId: string): Promise<{ error?: string; status?: number; count?: number }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   const { data: existingImages, error: countError } = await supabase
     .from('coach_gallery')
@@ -128,7 +128,7 @@ export async function validateImageOwnership(imageId: string, coachId: string): 
   error?: string;
   status?: number;
 }> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { data: galleryImage, error: imageError } = await supabase
     .from('coach_gallery')
