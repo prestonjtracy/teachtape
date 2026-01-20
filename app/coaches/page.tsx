@@ -59,19 +59,42 @@ function StarRating({ rating, reviewCount }: { rating: number; reviewCount: numb
 export default async function CoachesPage() {
   try {
     const supabase = await createClient();
+
+    // First, get all coaches
     const { data: profiles, error } = await supabase
       .from("profiles")
       .select(`
-        id, full_name, role, avatar_url, sport, bio,
-        listings:listings(id, title, price_cents, is_active),
-        reviews:reviews(rating)
+        id, full_name, role, avatar_url, sport, bio
       `)
       .eq("role", "coach");
 
     if (error) throw error;
 
+    // Then get listings separately for each coach
+    const profilesWithData = await Promise.all(
+      (profiles || []).map(async (profile) => {
+        // Get listings for this coach
+        const { data: listings } = await supabase
+          .from("listings")
+          .select("id, title, price_cents, is_active")
+          .eq("coach_id", profile.id);
+
+        // Get reviews for this coach
+        const { data: reviews } = await supabase
+          .from("reviews")
+          .select("rating")
+          .eq("coach_id", profile.id);
+
+        return {
+          ...profile,
+          listings: listings || [],
+          reviews: reviews || []
+        };
+      })
+    );
+
     // Filter listings to only active ones, but show all coaches
-    const coachesWithFilteredListings = (profiles || [])
+    const coachesWithFilteredListings = profilesWithData
       .map(profile => ({
         ...profile,
         listings: (profile.listings || []).filter((l: any) => l.is_active)
@@ -315,6 +338,7 @@ export default async function CoachesPage() {
     );
   } catch (err) {
     console.error("Error loading coaches:", err);
+    const errorMessage = err instanceof Error ? err.message : String(err);
     return (
       <div className="min-h-screen bg-[#F8FAFC]">
         <div className="bg-gradient-to-r from-[#123C7A] to-[#1E5BB5] text-white">
@@ -335,9 +359,14 @@ export default async function CoachesPage() {
               </svg>
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h2>
-            <p className="text-gray-600 mb-8">
+            <p className="text-gray-600 mb-4">
               We couldn't load the coaches. Please try again.
             </p>
+            {process.env.NODE_ENV === 'development' && (
+              <p className="text-sm text-red-600 mb-4 font-mono bg-red-50 p-2 rounded max-w-xl mx-auto">
+                {errorMessage}
+              </p>
+            )}
             <a
               href="/coaches"
               className="inline-flex items-center px-6 py-3 bg-[#F45A14] hover:bg-[#E04D0B] text-white font-semibold rounded-xl transition-colors"
