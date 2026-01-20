@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from "next/link";
+import { Button } from "@/components/ui/Button";
 import CoachDashboard from "@/components/dashboard/CoachDashboard";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/AuthContext";
