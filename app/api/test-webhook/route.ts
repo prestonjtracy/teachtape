@@ -1,15 +1,15 @@
 import { NextRequest } from "next/server";
-import { createServerClient } from "@/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   console.log("🧪 Test webhook endpoint called");
-  
+
   try {
     // Test Supabase connection
-    const supabase = createServerClient();
+    const supabase = await createClient();
     
     // Test a simple query to verify connection
     const { data, error } = await supabase

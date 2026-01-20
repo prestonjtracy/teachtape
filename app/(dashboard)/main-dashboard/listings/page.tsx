@@ -1,7 +1,7 @@
-import { createClient } from "@/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function ListingsPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("listings")
     .select("id, title, price_cents, duration_minutes");

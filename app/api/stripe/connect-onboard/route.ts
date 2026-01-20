@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { createServerClient } from "@/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +53,7 @@ export async function POST() {
   const account = await stripe.accounts.create({ type: "express" });
 
   // Initialize Supabase client
-  const supabase = createServerClient();
+  const supabase = await createClient();
 
   // Persist the new account ID in Supabase if possible.
   try {

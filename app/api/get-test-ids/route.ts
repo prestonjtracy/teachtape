@@ -1,4 +1,4 @@
-import { createServerClient } from "@/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = 'force-dynamic';
 
@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const supabase = createServerClient();
+    const supabase = await createClient();
     
     // Get a coach ID
     const { data: profiles, error: profilesError } = await supabase
