@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function PaymentsPage() {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Check authentication and admin role
     const { data: { user }, error: authError } = await supabase.auth.getUser()

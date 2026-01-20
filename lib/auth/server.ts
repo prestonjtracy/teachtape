@@ -37,7 +37,7 @@ export interface AuthError {
  * if (error) return NextResponse.json({ error: error.message }, { status: error.status })
  */
 export async function requireAuth(): Promise<AuthResult | AuthError> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
@@ -66,7 +66,7 @@ export async function requireAuth(): Promise<AuthResult | AuthError> {
  * if (error) return NextResponse.json({ error: error.message }, { status: error.status })
  */
 export async function requireAdmin(): Promise<AuthResult | AuthError> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
@@ -129,7 +129,7 @@ export async function requireAdmin(): Promise<AuthResult | AuthError> {
  * }
  */
 export async function getOptionalAuth(): Promise<AuthUser | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data: { user }, error } = await supabase.auth.getUser()
 
@@ -145,7 +145,7 @@ export async function getOptionalAuth(): Promise<AuthUser | null> {
  * Returns profile or null if not found
  */
 export async function getUserProfile(userId: string) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data: profile } = await supabase
     .from('profiles')

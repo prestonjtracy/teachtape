@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import AuditLogsTable from '@/components/admin/AuditLogsTable'
 
 export default async function AuditLogsPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   // Get audit logs with pagination
   const { data: auditLogs, error: logsError } = await supabase

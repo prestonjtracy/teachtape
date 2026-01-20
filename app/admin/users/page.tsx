@@ -4,7 +4,7 @@ import UsersTable from '@/components/admin/UsersTable'
 export const dynamic = 'force-dynamic'
 
 export default async function UsersPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const adminSupabase = createAdminClient()
   
   // Get users with their profiles

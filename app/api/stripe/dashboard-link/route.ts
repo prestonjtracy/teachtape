@@ -22,7 +22,7 @@ export async function POST() {
       return NextResponse.json({ error: authError.message }, { status: authError.status })
     }
 
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Get user's profile
     const { data: profile } = await supabase

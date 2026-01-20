@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   try {
     console.log('🔍 [GET /api/zoom-logs] Request received');
     
-    const supabase = createClient();
+    const supabase = await createClient();
     const adminSupabase = createAdminClient();
     
     // Get current user and verify admin access
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
   try {
     console.log('🔍 [POST /api/zoom-logs] Request received');
     
-    const supabase = createClient();
+    const supabase = await createClient();
     
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();

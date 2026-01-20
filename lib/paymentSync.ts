@@ -28,7 +28,7 @@ export interface PaymentSyncData {
  * Sync a payment from Stripe to the payments table
  */
 export async function syncPaymentToDatabase(paymentData: PaymentSyncData) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     // Check if payment already exists
@@ -77,7 +77,7 @@ export async function syncPaymentToDatabase(paymentData: PaymentSyncData) {
  * Process a Stripe payment intent webhook and sync to database
  */
 export async function processPaymentIntentWebhook(paymentIntent: Stripe.PaymentIntent) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     // Try to find associated booking or booking request
@@ -155,7 +155,7 @@ export async function updatePayoutStatus(
   status: 'pending' | 'in_transit' | 'paid' | 'failed' | 'canceled',
   failureReason?: string
 ) {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     const { error } = await supabase

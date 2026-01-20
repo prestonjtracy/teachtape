@@ -4,7 +4,7 @@ import CoachesTable from '@/components/admin/CoachesTable'
 export const dynamic = 'force-dynamic'
 
 export default async function CoachesPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // Get coaches with their profile data and services count
   // Note: listings table has FK to profiles, not coaches, so we can't join it here

@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }
 
-    const supabase = createClient()
+    const supabase = await createClient()
     const adminSupabase = createAdminClient()
     const profile = user.profile!
 
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 // GET endpoint to retrieve public settings for client-side use
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     
     // Get public settings only
     const { data: settings, error } = await supabase

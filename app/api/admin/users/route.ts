@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }
 
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Use admin client for user management operations
     const adminSupabase = createAdminClient()

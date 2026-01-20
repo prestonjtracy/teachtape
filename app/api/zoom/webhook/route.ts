@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
     console.log('✅ [Zoom Webhook] Signature verified')
 
     // Handle different event types
-    const supabase = createClient()
+    const supabase = await createClient()
     const meetingId = body.payload?.object?.id?.toString()
 
     switch (body.event) {

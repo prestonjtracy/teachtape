@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }
 
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Initialize Stripe
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY
@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }
 
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Initialize Stripe
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY

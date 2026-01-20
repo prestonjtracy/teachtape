@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }
 
-    const supabase = createClient()
+    const supabase = await createClient()
     const tableName = tableType
     const statusField = tableType === 'services' ? 'active' : 'is_active'
     const titleField = tableType === 'services' ? 'name' : 'title'

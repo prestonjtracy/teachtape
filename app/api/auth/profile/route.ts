@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 // GET the current user's profile - uses server-side auth which bypasses client RLS issues
 export async function GET() {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     const { data: { user }, error: userError } = await supabase.auth.getUser()
 

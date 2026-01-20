@@ -2,7 +2,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import ConversationsTable from '@/components/admin/ConversationsTable'
 
 export default async function ConversationsPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const adminSupabase = createAdminClient()
   
   // Get all conversations with participants and message count

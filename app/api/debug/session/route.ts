@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   console.log('🔐 [DEBUG SESSION] Supabase cookies:', supabaseCookies.map(c => c.name));
 
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Try to get the session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();

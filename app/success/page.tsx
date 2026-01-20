@@ -160,7 +160,7 @@ export default async function SuccessPage({ searchParams }: SuccessPageProps) {
 
     // Get coach and listing details from metadata
     if (sessionData.metadata) {
-      const supabase = createClient();
+      const supabase = await createClient();
       
       // Get coach name
       if (sessionData.metadata.coach_id) {

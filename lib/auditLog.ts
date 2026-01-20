@@ -22,7 +22,7 @@ export async function logAdminAction(
   logData: AuditLogData
 ) {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
     const adminSupabase = createAdminClient()
 
     // Get admin email

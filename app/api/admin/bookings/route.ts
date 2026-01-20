@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }
 
-    const supabase = createClient()
+    const supabase = await createClient()
     const tableName = tableType
     let updateData: Record<string, string> = {}
 

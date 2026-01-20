@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     }
 
     // Initialize Supabase and get current user
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     console.log('🔍 [Stripe Connect] Auth check:', { 

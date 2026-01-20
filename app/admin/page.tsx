@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 export const dynamic = 'force-dynamic'
 
 export default async function AdminDashboard() {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // Check authentication and admin role
   const { data: { user } } = await supabase.auth.getUser()

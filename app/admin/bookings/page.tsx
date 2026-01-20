@@ -4,7 +4,7 @@ import BookingsTable from '@/components/admin/BookingsTable'
 export const dynamic = 'force-dynamic'
 
 export default async function BookingsPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   // Get legacy bookings with coach and customer info
   const { data: legacyBookings, error: bookingsError } = await supabase

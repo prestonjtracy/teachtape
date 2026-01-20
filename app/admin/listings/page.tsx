@@ -4,7 +4,7 @@ import ListingsTable from '@/components/admin/ListingsTable'
 export const dynamic = 'force-dynamic'
 
 export default async function ListingsPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   // Get services (newer structure) with coach profile data
   const { data: services, error: servicesError } = await supabase

@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     console.log(`👤 [Auth Hook] Creating profile for user: ${email} (${userId})`)
 
     // Create Supabase admin client (bypasses RLS)
-    const supabase = createClient()
+    const supabase = await createClient()
 
     // Check if profile already exists
     const { data: existingProfile } = await supabase

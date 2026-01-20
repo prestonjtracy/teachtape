@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }
 
-    const supabase = createClient()
+    const supabase = await createClient()
     const profile = user.profile!
 
     // SECURITY: Validate that coach exists before performing any action (IDOR protection)

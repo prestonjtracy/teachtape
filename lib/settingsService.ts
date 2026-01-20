@@ -31,7 +31,7 @@ export const CommissionSettingsUpdateSchema = z.object({
  * Get current commission settings with safe defaults
  */
 export async function getCommissionSettings(): Promise<CommissionSettings> {
-  const supabase = createClient()
+  const supabase = await createClient()
   
   try {
     // Get commission-related settings
@@ -84,7 +84,7 @@ export async function updateCommissionSettings(
   adminProfileId: string,
   adminEmail: string
 ): Promise<{ success: boolean; error?: string; old_values?: CommissionSettings; new_values?: CommissionSettings }> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     // Validate input
@@ -181,7 +181,7 @@ export async function verifyAdminAccess(): Promise<{
   adminProfileId?: string
   adminEmail?: string
 }> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   try {
     // Get current user
