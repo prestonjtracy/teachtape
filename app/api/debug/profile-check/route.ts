@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   // Allow debug endpoint for authenticated users (they can only see their own data anyway)
 
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();

@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
   }
 
   // SECURITY: Check for duplicate event processing (idempotency)
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: existingEvent } = await supabase
     .from('webhook_events')
     .select('id')
@@ -302,7 +302,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
   }
 
   // Create server-side Supabase client
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Build booking data based on type
   const bookingData: Record<string, any> = {
@@ -362,7 +362,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, stripe:
 }
 
 async function sendBookingConfirmationEmails(session: Stripe.Checkout.Session, bookingId: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   // Get additional booking data needed for emails
   const listingId = session.metadata?.listing_id;
@@ -446,7 +446,7 @@ async function handlePaymentSucceeded(paymentIntent: Stripe.PaymentIntent) {
     booking_request_id: paymentIntent.metadata?.booking_request_id
   });
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const bookingRequestId = paymentIntent.metadata?.booking_request_id;
 
   if (bookingRequestId) {
@@ -496,7 +496,7 @@ async function handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {
     booking_request_id: paymentIntent.metadata?.booking_request_id
   });
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const bookingRequestId = paymentIntent.metadata?.booking_request_id;
 
   // Handle booking request payment failures

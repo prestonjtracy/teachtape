@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const validatedParams = GetGalleryParamsSchema.parse({ coachId });
     console.log('✅ [GET /api/coach-gallery] Params validated:', validatedParams);
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // If no coachId provided, get current user's gallery
     let targetCoachId = validatedParams.coachId;

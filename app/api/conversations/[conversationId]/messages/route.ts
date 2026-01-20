@@ -12,7 +12,7 @@ export async function GET(
     const conversationId = params.conversationId;
     console.log('🔍 [API /conversations/:id/messages] Loading messages for:', conversationId);
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();

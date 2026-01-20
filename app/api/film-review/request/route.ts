@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       has_payment_method: !!validatedData.payment_method_id
     });
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Get current user (athlete)
     const { data: { user }, error: userError } = await supabase.auth.getUser();

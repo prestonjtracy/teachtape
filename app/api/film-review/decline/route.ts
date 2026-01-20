@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { bookingId } = DeclineSchema.parse(body);
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Verify the current user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();

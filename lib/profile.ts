@@ -37,7 +37,7 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
 
 export async function getProfileById(userId: string): Promise<UserProfile | null> {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const { data: profile, error } = await supabase
       .from('profiles')

@@ -21,7 +21,7 @@ export async function PUT(req: NextRequest) {
       image_ids: validatedData.orderedIds
     });
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();

@@ -8,7 +8,7 @@ export async function GET() {
   try {
     console.log('🔍 [API /profile] Starting...');
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();

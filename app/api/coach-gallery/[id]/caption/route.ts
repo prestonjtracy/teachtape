@@ -34,7 +34,7 @@ export async function PATCH(
       has_caption: !!validatedData.caption
     });
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();

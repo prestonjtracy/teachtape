@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     }
 
     const stripe = new Stripe(secretKey, { apiVersion: "2024-06-20" });
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Verify the current user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();

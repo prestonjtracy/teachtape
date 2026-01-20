@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: authError.message }, { status: authError.status });
     }
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // SECURITY: Get coach profile to filter bookings
     const { data: coachProfile } = await supabase

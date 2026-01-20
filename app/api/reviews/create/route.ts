@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: authError.message }, { status: authError.status });
     }
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Get athlete's profile
     const { data: athleteProfile, error: profileError } = await supabase

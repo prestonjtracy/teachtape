@@ -19,7 +19,7 @@ export async function DELETE(
     const validatedParams = DeleteImageParamsSchema.parse(params);
     console.log('✅ [DELETE /api/coach-gallery/[id]/delete] Params validated:', validatedParams);
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();

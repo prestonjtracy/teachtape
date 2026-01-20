@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = createClient();
+    const supabase = await createClient();
     
     // Find requests that are pending and older than 72 hours
     const seventyTwoHoursAgo = new Date();

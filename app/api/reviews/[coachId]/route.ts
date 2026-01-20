@@ -17,7 +17,7 @@ export async function GET(
     // Validate coach ID format
     const validCoachId = UuidSchema.parse(params.coachId);
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Fetch reviews for this coach with athlete info
     const { data: reviews, error: reviewsError } = await supabase

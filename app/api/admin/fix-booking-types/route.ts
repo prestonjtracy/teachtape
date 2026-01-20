@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 // POST to fix booking types based on listing type
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Verify user is admin
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
 // GET to preview what would be fixed
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Verify user is admin
     const { data: { user }, error: authError } = await supabase.auth.getUser();

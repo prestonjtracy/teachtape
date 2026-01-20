@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       has_notes: !!validatedData.athlete_notes
     });
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Fetch listing details - must be a film_review type listing
     const { data: listing, error: listingError } = await supabase

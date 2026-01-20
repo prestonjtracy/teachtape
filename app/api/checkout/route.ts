@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       coach_id: validatedData.coach_id
     });
 
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Fetch listing details from the listings table
     const { data: listing, error: listingError } = await supabase
