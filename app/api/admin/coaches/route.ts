@@ -37,33 +37,27 @@ export async function POST(request: NextRequest) {
           .select('full_name, profile_id')
           .eq('id', coachId)
           .single()
-        
-        // Mark coach as verified
-        const verifyUpdate: {
-          is_public: boolean;
-          verified_at: string;
-          verified_by: string;
-        } = {
-          is_public: true,
-          verified_at: new Date().toISOString(),
-          verified_by: profile.id  // Use profile ID instead of auth user ID
-        }
-        
+
+        // Try to update with verified_at column first
         const { error: verifyError } = await supabase
           .from('coaches')
-          .update(verifyUpdate)
+          .update({
+            is_public: true,
+            verified_at: new Date().toISOString()
+          })
           .eq('id', coachId)
 
         if (verifyError) {
-          // If verified_at/verified_by columns don't exist, try with just is_public
-          const fallbackUpdate = { is_public: true }
+          console.error('Verify update error:', verifyError)
+          // If verified_at column doesn't exist, try with just is_public
           const { error: fallbackError } = await supabase
             .from('coaches')
-            .update(fallbackUpdate)
+            .update({ is_public: true })
             .eq('id', coachId)
-          
+
           if (fallbackError) {
-            return NextResponse.json({ error: 'Failed to verify coach' }, { status: 500 })
+            console.error('Verify fallback error:', fallbackError)
+            return NextResponse.json({ error: 'Failed to verify coach: ' + fallbackError.message }, { status: 500 })
           }
         }
 

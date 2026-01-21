@@ -51,7 +51,7 @@ export default function CoachesTable({ initialCoaches }: CoachesTableProps) {
 
   const handleAction = async (coachId: string, action: string) => {
     if (!confirm(`Are you sure you want to ${action} this coach?`)) return
-    
+
     setLoading(true)
     try {
       const response = await fetch('/api/admin/coaches', {
@@ -61,7 +61,25 @@ export default function CoachesTable({ initialCoaches }: CoachesTableProps) {
       })
 
       if (response.ok) {
-        // Refresh the page data
+        // Update local state immediately for instant UI feedback
+        setCoaches(prevCoaches => prevCoaches.map(coach => {
+          if (coach.id !== coachId) return coach
+
+          switch (action) {
+            case 'verify':
+              return { ...coach, verified: true }
+            case 'deactivate':
+              return { ...coach, is_public: false }
+            case 'activate':
+              return { ...coach, is_public: true }
+            case 'delete':
+              return coach // Will be filtered out below
+            default:
+              return coach
+          }
+        }).filter(coach => action !== 'delete' || coach.id !== coachId))
+
+        // Also refresh the page data for any server-side changes
         router.refresh()
       } else {
         const data = await response.json()
