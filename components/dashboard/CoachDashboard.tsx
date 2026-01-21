@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from "next/link";
+import { useRouter } from 'next/navigation';
 import BookingRequestsList from "@/components/dashboard/BookingRequestsList";
 
 interface Booking {
@@ -14,6 +15,7 @@ interface Booking {
   stripe_session_id: string;
   starts_at?: string | null;
   ends_at?: string | null;
+  conversation_id?: string | null;
   listing?: {
     title: string;
     duration_minutes?: number;
@@ -47,10 +49,13 @@ interface CoachDashboardProps {
 
 export default function CoachDashboard({
   coach,
-  bookings = [],
+  bookings: initialBookings = [],
   earningsSummary,
   stripeAccountStatus
 }: CoachDashboardProps) {
+  const router = useRouter();
+  const [bookings, setBookings] = useState<Booking[]>(initialBookings);
+  const [loadingConversation, setLoadingConversation] = useState<string | null>(null);
   const [coachStats, setCoachStats] = useState<{
     averageRating: number;
     totalReviews: number;
@@ -159,6 +164,38 @@ export default function CoachDashboard({
       alert('Failed to continue onboarding');
     }
   }
+
+  const handleViewSession = async (booking: Booking) => {
+    // If conversation already exists, navigate directly
+    if (booking.conversation_id) {
+      router.push(`/messages/${booking.conversation_id}`);
+      return;
+    }
+
+    // Otherwise, create a conversation first
+    setLoadingConversation(booking.id);
+    try {
+      const response = await fetch(`/api/bookings/${booking.id}/conversation`, {
+        method: 'POST',
+      });
+      const data = await response.json();
+
+      if (response.ok && data.conversation_id) {
+        // Update local state with the new conversation_id
+        setBookings(prev => prev.map(b =>
+          b.id === booking.id ? { ...b, conversation_id: data.conversation_id } : b
+        ));
+        router.push(`/messages/${data.conversation_id}`);
+      } else {
+        alert(data.message || data.error || 'Failed to create conversation');
+      }
+    } catch (err) {
+      console.error('Failed to create conversation:', err);
+      alert('Failed to start session chat. Please try again.');
+    } finally {
+      setLoadingConversation(null);
+    }
+  };
 
   // Simple sparkline component
   const MiniSparkline = ({ data, color }: { data: number[], color: string }) => {
@@ -465,13 +502,37 @@ export default function CoachDashboard({
                             {session.customer_email || 'Athlete'}
                           </p>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-[#123C7A]">
-                            {formatDate(session.starts_at!)}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {session.listing?.duration_minutes || 60} min
-                          </p>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleViewSession(session)}
+                            disabled={loadingConversation === session.id}
+                            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-[#F45A14] to-[#FF7A3D] hover:from-[#E04D0B] hover:to-[#F45A14] text-white text-sm font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {loadingConversation === session.id ? (
+                              <>
+                                <svg className="w-4 h-4 mr-1.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Loading...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                View Session
+                              </>
+                            )}
+                          </button>
+                          <div className="text-right">
+                            <p className="text-sm font-medium text-[#123C7A]">
+                              {formatDate(session.starts_at!)}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {session.listing?.duration_minutes || 60} min
+                            </p>
+                          </div>
                         </div>
                       </div>
                     ))}
