@@ -125,10 +125,39 @@ export async function GET() {
           };
         }
 
+        // Get message count (for context)
+        const { count: messageCount } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversation_id', conversation.id);
+
+        // Get related booking request if any (for session context)
+        const { data: bookingRequest } = await supabase
+          .from('booking_requests')
+          .select(`
+            id,
+            status,
+            proposed_start,
+            proposed_end,
+            listing:listings(
+              id,
+              title,
+              price_cents,
+              duration_minutes,
+              listing_type
+            )
+          `)
+          .eq('conversation_id', conversation.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
         return {
           ...conversation,
           participants: participantsWithProfiles,
-          lastMessage: lastMessageWithSender
+          lastMessage: lastMessageWithSender,
+          messageCount: messageCount || 0,
+          bookingRequest
         };
       })
     );
