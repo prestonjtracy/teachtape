@@ -10,6 +10,7 @@ const CreateReviewSchema = z.object({
   booking_id: z.string().uuid("Invalid booking ID"),
   rating: z.number().int().min(1, "Rating must be at least 1").max(5, "Rating must be at most 5"),
   comment: z.string().max(500, "Comment must be 500 characters or less").optional().nullable(),
+  would_recommend: z.boolean().optional().default(true),
 });
 
 export async function POST(req: NextRequest) {
@@ -125,6 +126,7 @@ export async function POST(req: NextRequest) {
         athlete_id: athleteProfile.id,
         rating: validatedData.rating,
         comment: validatedData.comment || null,
+        would_recommend: validatedData.would_recommend,
       })
       .select()
       .single();
