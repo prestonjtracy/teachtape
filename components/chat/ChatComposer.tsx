@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useRef, KeyboardEvent } from 'react';
-import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 
 interface ChatComposerProps {
@@ -11,11 +10,11 @@ interface ChatComposerProps {
   placeholder?: string;
 }
 
-export function ChatComposer({ 
-  conversationId, 
+export function ChatComposer({
+  conversationId,
   onSendMessage,
   disabled = false,
-  placeholder = "Type your message..." 
+  placeholder = "Type your message..."
 }: ChatComposerProps) {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -42,28 +41,23 @@ export function ChatComposer({
         }),
       });
 
-      // Parse response once
       let data;
       try {
         data = await response.json();
-      } catch (parseError) {
-        console.error('Failed to parse response:', parseError);
+      } catch {
         throw new Error('Server returned an invalid response');
       }
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to send message');
       }
-      
-      // Clear the input
+
       setMessage('');
-      
-      // Reset textarea height
+
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
 
-      // Callback for parent component (optional)
       if (onSendMessage) {
         onSendMessage({
           body: message.trim(),
@@ -72,7 +66,6 @@ export function ChatComposer({
       }
 
     } catch (err) {
-      console.error('Error sending message:', err);
       setError(err instanceof Error ? err.message : 'Failed to send message');
     } finally {
       setSending(false);
@@ -88,89 +81,112 @@ export function ChatComposer({
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessage(e.target.value);
-    
-    // Auto-resize textarea
+
     const textarea = e.target;
     textarea.style.height = 'auto';
-    const scrollHeight = Math.min(textarea.scrollHeight, 120); // Max height ~5 lines
+    const scrollHeight = Math.min(textarea.scrollHeight, 120);
     textarea.style.height = scrollHeight + 'px';
-    
-    // Clear error when user starts typing
+
     if (error) {
       setError(null);
     }
   };
 
+  const canSend = message.trim().length > 0 && !sending && !disabled && message.length <= 2000;
+
   return (
-    <div className="border-t border-gray-200 bg-white p-4">
+    <div className="border-t border-gray-100 bg-white p-4">
       {error && (
-        <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">
-          {error}
+        <div className="mb-3 p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl flex items-center gap-2">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className="ml-auto p-1 hover:bg-red-100 rounded-full transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
-      
-      <div className="flex space-x-3">
+
+      <div className="flex items-end gap-3">
+        {/* Input Container */}
         <div className="flex-1 relative">
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={handleTextareaChange}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={disabled || sending}
-            className={cn(
-              'w-full resize-none rounded-lg border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed',
-              'min-h-[44px] max-h-[120px]', // ~1 line min, ~5 lines max
-              error && 'border-red-300 focus:ring-red-500'
+          <div className={cn(
+            'relative rounded-2xl border bg-gray-50 transition-all duration-200',
+            message.length > 0 ? 'border-[#123C7A]/30 bg-white shadow-sm' : 'border-gray-200',
+            error && 'border-red-300'
+          )}>
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={handleTextareaChange}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              disabled={disabled || sending}
+              className={cn(
+                'w-full resize-none bg-transparent px-4 py-3 pr-12 text-sm text-gray-800 placeholder-gray-400',
+                'focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed',
+                'min-h-[44px] max-h-[120px]'
+              )}
+              style={{ height: 'auto' }}
+            />
+
+            {/* Character count */}
+            {message.length > 1800 && (
+              <div className={cn(
+                'absolute bottom-2 right-3 text-xs font-medium',
+                message.length > 1950 ? 'text-red-500' : 'text-gray-400'
+              )}>
+                {message.length}/2000
+              </div>
             )}
-            style={{ height: 'auto' }}
-          />
-          
-          {/* Character count (optional, shows when approaching limit) */}
-          {message.length > 1800 && (
-            <div className={cn(
-              'absolute bottom-2 right-3 text-xs',
-              message.length > 1950 ? 'text-red-500' : 'text-gray-400'
-            )}>
-              {message.length}/2000
-            </div>
-          )}
+          </div>
+
+          {/* Helper text */}
+          <div className="mt-1.5 flex items-center justify-between px-1">
+            <span className="text-xs text-gray-400">
+              Press <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-500 font-medium">Enter</kbd> to send
+            </span>
+            <span className="text-xs text-gray-400">
+              <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-gray-500 font-medium">Shift + Enter</kbd> for new line
+            </span>
+          </div>
         </div>
-        
-        <Button
+
+        {/* Send Button */}
+        <button
           onClick={handleSend}
-          disabled={!message.trim() || sending || disabled || message.length > 2000}
-          size="md"
-          className="self-end"
+          disabled={!canSend}
+          className={cn(
+            'flex items-center justify-center w-12 h-12 rounded-xl transition-all duration-200 mb-6',
+            canSend
+              ? 'bg-gradient-to-r from-[#F45A14] to-[#FF7A3D] text-white shadow-lg shadow-orange-500/25 hover:shadow-xl hover:shadow-orange-500/30 hover:scale-105'
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+          )}
         >
           {sending ? (
-            <>
-              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
-              Sending...
-            </>
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
           ) : (
-            <>
-              <svg 
-                className="h-4 w-4 mr-1" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={2} 
-                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" 
-                />
-              </svg>
-              Send
-            </>
+            <svg
+              className={cn('w-5 h-5 transition-transform', canSend && 'group-hover:translate-x-0.5')}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+              />
+            </svg>
           )}
-        </Button>
-      </div>
-      
-      <div className="mt-2 text-xs text-gray-500">
-        Press Enter to send, Shift + Enter for new line
+        </button>
       </div>
     </div>
   );
