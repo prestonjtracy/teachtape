@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
       .select(`
         id,
         listing_id,
+        conversation_id,
         customer_email,
         amount_paid_cents,
         status,
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest) {
     // Transform the data to match the expected format
     const transformedBookings = bookings?.map(booking => ({
       ...booking,
+      conversation_id: booking.conversation_id,
       listing: (booking.listings as any)?.[0] ? {
         title: (booking.listings as any)[0].title,
         duration_minutes: (booking.listings as any)[0].duration_minutes
