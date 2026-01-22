@@ -48,7 +48,8 @@ export async function GET() {
         stripe_session_id,
         starts_at,
         ends_at,
-        listing:listings(title)
+        conversation_id,
+        listing:listings(title, duration_minutes)
       `)
       .eq('coach_id', profile.id)
       .order('created_at', { ascending: false })
