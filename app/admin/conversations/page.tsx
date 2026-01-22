@@ -57,25 +57,29 @@ export default async function ConversationsPage() {
 
     conversationsWithCounts = conversations.map(conversation => {
       const participants = conversation.conversation_participants || []
-      const coach = participants.find(p => p.role === 'coach')?.user as any
-      const athlete = participants.find(p => p.role === 'athlete')?.user as any
+      const coachParticipant = participants.find(p => p.role === 'coach')
+      const athleteParticipant = participants.find(p => p.role === 'athlete')
+
+      // Supabase returns the joined user as an object, not an array
+      const coach = coachParticipant?.user as { id: string; full_name: string; avatar_url: string | null; auth_user_id: string } | null
+      const athlete = athleteParticipant?.user as { id: string; full_name: string; avatar_url: string | null; auth_user_id: string } | null
 
       return {
         id: conversation.id,
         created_at: conversation.created_at,
         updated_at: conversation.updated_at,
         message_count: countMap[conversation.id] || 0,
-        coach: coach?.[0] ? {
-          id: coach[0].id,
-          full_name: coach[0].full_name,
-          avatar_url: coach[0].avatar_url,
-          email: userEmailMap[coach[0].auth_user_id] || 'N/A'
+        coach: coach ? {
+          id: coach.id,
+          full_name: coach.full_name || 'Unknown',
+          avatar_url: coach.avatar_url,
+          email: userEmailMap[coach.auth_user_id] || 'N/A'
         } : null,
-        athlete: athlete?.[0] ? {
-          id: athlete[0].id,
-          full_name: athlete[0].full_name,
-          avatar_url: athlete[0].avatar_url,
-          email: userEmailMap[athlete[0].auth_user_id] || 'N/A'
+        athlete: athlete ? {
+          id: athlete.id,
+          full_name: athlete.full_name || 'Unknown',
+          avatar_url: athlete.avatar_url,
+          email: userEmailMap[athlete.auth_user_id] || 'N/A'
         } : null
       }
     })
