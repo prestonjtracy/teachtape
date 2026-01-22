@@ -60,9 +60,13 @@ export default async function ConversationsPage() {
       const coachParticipant = participants.find(p => p.role === 'coach')
       const athleteParticipant = participants.find(p => p.role === 'athlete')
 
-      // Supabase returns the joined user as an object, not an array
-      const coach = coachParticipant?.user as { id: string; full_name: string; avatar_url: string | null; auth_user_id: string } | null
-      const athlete = athleteParticipant?.user as { id: string; full_name: string; avatar_url: string | null; auth_user_id: string } | null
+      // Supabase returns the joined user as an array, get the first element
+      const coachUserData = coachParticipant?.user as any
+      const athleteUserData = athleteParticipant?.user as any
+
+      // Handle both array and object formats from Supabase
+      const coach = Array.isArray(coachUserData) ? coachUserData[0] : coachUserData
+      const athlete = Array.isArray(athleteUserData) ? athleteUserData[0] : athleteUserData
 
       return {
         id: conversation.id,
