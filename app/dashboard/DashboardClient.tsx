@@ -15,12 +15,8 @@ interface Booking {
   status: string;
   listing_id: string;
   stripe_session_id: string;
-  starts_at?: string | null;
-  ends_at?: string | null;
-  conversation_id?: string | null;
   listing?: {
     title: string;
-    duration_minutes?: number;
   };
 }
 
