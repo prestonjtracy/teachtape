@@ -514,7 +514,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         timeZone: bookingRequest.timezone,
       });
 
-      systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate} - ${sessionEndTime}\n\n**For Athlete:** [🎥 Join Meeting](${zoomJoinUrl})\n\n**For Coach:** [🎥 Start Meeting](${zoomStartUrl})`;
+      systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate} - ${sessionEndTime}\n\n[🎥 Join Meeting](${zoomJoinUrl})`;
     } else if (zoomFailed) {
       // Notify users that Zoom meeting couldn't be created automatically
       systemMessage += `\n\n⚠️ **Note:** Automatic Zoom meeting creation failed. Please coordinate directly to schedule your session.`;

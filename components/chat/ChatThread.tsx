@@ -250,42 +250,24 @@ export const ChatThread = forwardRef<ChatThreadRef, ChatThreadProps>(
               )}
             </div>
 
-            {/* Zoom Buttons */}
-            {(metadata?.athlete_join_url || metadata?.coach_start_url) && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {metadata.athlete_join_url && (
-                  <button
-                    onClick={async () => {
-                      await logZoomClick(metadata.booking_id, 'join_meeting');
-                      window.open(metadata.athlete_join_url, '_blank');
-                    }}
-                    className="group flex items-center justify-center gap-2 px-5 py-3.5 bg-gradient-to-r from-[#F45A14] to-[#FF7A3D] text-white font-semibold rounded-xl shadow-lg shadow-orange-500/25 hover:shadow-xl hover:shadow-orange-500/30 hover:scale-[1.02] transition-all duration-200"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    <span>Join Meeting</span>
-                    <svg className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </button>
-                )}
-
-                {metadata.coach_start_url && (
-                  <button
-                    onClick={async () => {
-                      await logZoomClick(metadata.booking_id, 'start_meeting');
-                      window.open(metadata.coach_start_url, '_blank');
-                    }}
-                    className="group flex items-center justify-center gap-2 px-5 py-3.5 bg-white text-[#123C7A] font-semibold rounded-xl border-2 border-[#123C7A] hover:bg-[#123C7A] hover:text-white hover:scale-[1.02] transition-all duration-200"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span>Start Meeting (Coach)</span>
-                  </button>
-                )}
+            {/* Zoom Button */}
+            {metadata?.athlete_join_url && (
+              <div className="flex justify-center">
+                <button
+                  onClick={async () => {
+                    await logZoomClick(metadata.booking_id, 'join_meeting');
+                    window.open(metadata.athlete_join_url, '_blank');
+                  }}
+                  className="group flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-[#F45A14] to-[#FF7A3D] text-white font-semibold rounded-xl shadow-lg shadow-orange-500/25 hover:shadow-xl hover:shadow-orange-500/30 hover:scale-[1.02] transition-all duration-200"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span>Join Meeting</span>
+                  <svg className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </button>
               </div>
             )}
 
@@ -323,18 +305,14 @@ export const ChatThread = forwardRef<ChatThreadRef, ChatThreadProps>(
       const placeholder = `__MARKDOWN_BUTTON_${markdownButtons.length}__`;
       processedBody = processedBody.replace(fullMatch, placeholder);
 
-      const isStartButton = linkText.toLowerCase().includes('start');
-      const isJoinButton = linkText.toLowerCase().includes('join');
+      const isZoomLink = url.includes('zoom');
 
+      // All Zoom buttons now use the same join style (orange gradient for system messages)
       let buttonStyle = 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm';
 
-      if (isSystemMsg) {
-        if (isStartButton) {
-          buttonStyle = 'bg-[#123C7A] text-white hover:bg-[#0d2d5c] shadow-sm';
-        } else if (isJoinButton) {
-          buttonStyle = 'bg-gradient-to-r from-[#F45A14] to-[#FF7A3D] text-white hover:shadow-lg shadow-sm';
-        }
-      } else {
+      if (isSystemMsg && isZoomLink) {
+        buttonStyle = 'bg-gradient-to-r from-[#F45A14] to-[#FF7A3D] text-white hover:shadow-lg shadow-sm';
+      } else if (!isSystemMsg) {
         buttonStyle = isOwn
           ? 'bg-white/20 text-white hover:bg-white/30 border border-white/30'
           : 'bg-[#123C7A] text-white hover:bg-[#0d2d5c] shadow-sm';
@@ -346,10 +324,9 @@ export const ChatThread = forwardRef<ChatThreadRef, ChatThreadProps>(
             onClick={async (e) => {
               e.preventDefault();
 
-              if (message && url.includes('zoom')) {
-                const actionType = isStartButton ? 'start_meeting' : 'join_meeting';
+              if (message && isZoomLink) {
                 try {
-                  await logZoomClick(null, actionType);
+                  await logZoomClick(null, 'join_meeting');
                 } catch {
                   // Continue anyway
                 }
@@ -384,8 +361,7 @@ export const ChatThread = forwardRef<ChatThreadRef, ChatThreadProps>(
       }
 
       if (zoomUrlRegex.test(part) && markdownButtons.length === 0) {
-        const isJoinUrl = part.includes('/j/') || part.toLowerCase().includes('join');
-        const buttonText = isJoinUrl ? 'Join Zoom Meeting' : 'Start Zoom Meeting';
+        const buttonText = 'Join Zoom Meeting';
 
         const buttonStyle = isSystemMsg
           ? 'bg-gradient-to-r from-[#F45A14] to-[#FF7A3D] text-white shadow-sm hover:shadow-lg'
