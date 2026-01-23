@@ -1,12 +1,13 @@
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
-import { 
-  BookingEmailData, 
+import {
+  BookingEmailData,
   BookingRequestEmailData,
-  generateAthleteReceiptEmail, 
+  generateAthleteReceiptEmail,
   generateCoachNotificationEmail,
   generateNewRequestCoachEmail,
   generateRequestAcceptedAthleteEmail,
+  generateRequestAcceptedCoachEmail,
   generateRequestDeclinedAthleteEmail
 } from "./emailTemplates";
 
@@ -171,39 +172,40 @@ export async function sendBookingRequestEmails(data: BookingRequestEmailData, ty
       requestId: data.requestId
     });
 
-    let athleteEmail: { subject: string; html: string; text: string } | null = null;
-    let coachEmail: { subject: string; html: string; text: string } | null = null;
+    let athleteEmailContent: { subject: string; html: string; text: string } | null = null;
+    let coachEmailContent: { subject: string; html: string; text: string } | null = null;
 
     switch (type) {
       case 'new_request':
-        coachEmail = generateNewRequestCoachEmail(data);
+        coachEmailContent = generateNewRequestCoachEmail(data);
         break;
       case 'accepted':
-        athleteEmail = generateRequestAcceptedAthleteEmail(data);
+        athleteEmailContent = generateRequestAcceptedAthleteEmail(data);
+        coachEmailContent = generateRequestAcceptedCoachEmail(data);
         break;
       case 'declined':
-        athleteEmail = generateRequestDeclinedAthleteEmail(data);
+        athleteEmailContent = generateRequestDeclinedAthleteEmail(data);
         break;
     }
 
     // Send athlete email if needed
-    if (athleteEmail) {
+    if (athleteEmailContent) {
       await sendEmailResend({
         to: data.athleteEmail,
-        subject: athleteEmail.subject,
-        html: athleteEmail.html,
-        text: athleteEmail.text
+        subject: athleteEmailContent.subject,
+        html: athleteEmailContent.html,
+        text: athleteEmailContent.text
       });
       console.log(`✅ [sendBookingRequestEmails] ${type} email sent to athlete: ${data.athleteEmail}`);
     }
 
     // Send coach email if needed
-    if (coachEmail) {
+    if (coachEmailContent) {
       await sendEmailResend({
         to: data.coachEmail,
-        subject: coachEmail.subject,
-        html: coachEmail.html,
-        text: coachEmail.text
+        subject: coachEmailContent.subject,
+        html: coachEmailContent.html,
+        text: coachEmailContent.text
       });
       console.log(`✅ [sendBookingRequestEmails] ${type} email sent to coach: ${data.coachEmail}`);
     }

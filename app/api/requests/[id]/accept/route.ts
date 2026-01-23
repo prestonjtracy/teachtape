@@ -573,7 +573,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           proposedEnd: new Date(bookingRequest.proposed_end),
           timezone: bookingRequest.timezone,
           requestedAt: new Date(),
-          chatUrl: `${process.env.APP_URL || 'https://teachtape.local'}/messages/${bookingRequest.conversation_id}`
+          chatUrl: `${process.env.APP_URL || 'https://teachtape.local'}/messages/${bookingRequest.conversation_id}`,
+          zoomJoinUrl: zoomJoinUrl || undefined
         };
 
         console.log('📧 [POST /api/requests/accept] Sending email to athlete:', athleteEmail);

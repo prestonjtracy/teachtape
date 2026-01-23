@@ -60,6 +60,9 @@ export interface BookingRequestEmailData {
 
   // Chat link
   chatUrl?: string;
+
+  // Zoom meeting link (for accepted bookings)
+  zoomJoinUrl?: string;
 }
 
 export interface FilmReviewEmailData {
@@ -767,7 +770,7 @@ export function generateRequestAcceptedAthleteEmail(data: BookingRequestEmailDat
     minute: '2-digit'
   });
 
-  const subject = `Coaching Request Accepted: ${data.listingTitle} with ${data.coachName}`;
+  const subject = `Session Confirmed: ${data.listingTitle} with ${data.coachName}`;
 
   const html = `
 <!DOCTYPE html>
@@ -775,7 +778,7 @@ export function generateRequestAcceptedAthleteEmail(data: BookingRequestEmailDat
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Request Accepted - TeachTape</title>
+  <title>Session Confirmed - TeachTape</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -807,6 +810,27 @@ export function generateRequestAcceptedAthleteEmail(data: BookingRequestEmailDat
       text-align: center;
       font-weight: bold;
     }
+    .zoom-section {
+      background: linear-gradient(135deg, #F45A14, #FF7A3D);
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+      text-align: center;
+    }
+    .zoom-button {
+      display: inline-block;
+      background: white;
+      color: #F45A14;
+      padding: 16px 32px;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 18px;
+      margin: 12px 0;
+    }
+    .zoom-button:hover {
+      background: #f8f9fa;
+    }
     .request-details {
       background: #f8f9fa;
       border-radius: 6px;
@@ -835,13 +859,13 @@ export function generateRequestAcceptedAthleteEmail(data: BookingRequestEmailDat
     }
     .button {
       display: inline-block;
-      background: #007bff;
+      background: #123C7A;
       color: white;
       padding: 12px 24px;
       text-decoration: none;
       border-radius: 6px;
       font-weight: bold;
-      margin: 16px 0;
+      margin: 8px 4px;
     }
     .footer {
       text-align: center;
@@ -858,17 +882,40 @@ export function generateRequestAcceptedAthleteEmail(data: BookingRequestEmailDat
     <div class="header">
       <h1>TeachTape</h1>
     </div>
-    
+
     <div class="success-badge">
-      🎉 Request Accepted!
+      🎉 Session Confirmed!
     </div>
-    
+
     <p>Hi${data.athleteName ? ` ${data.athleteName}` : ''},</p>
-    
-    <p>Great news! ${data.coachName} has accepted your coaching request.</p>
-    
+
+    <p>Great news! ${data.coachName} has accepted your coaching request and your session is confirmed.</p>
+
+    ${data.zoomJoinUrl ? `
+    <div class="zoom-section">
+      <h2 style="color: white; margin: 0 0 8px 0;">🎥 Your Zoom Meeting</h2>
+      <p style="color: white; margin: 0 0 16px 0; opacity: 0.9;">Click the button below to join your session when it's time:</p>
+      <a href="${data.zoomJoinUrl}" class="zoom-button">Join Meeting</a>
+      <p style="color: white; margin: 16px 0 0 0; font-size: 14px; opacity: 0.8;">
+        Save this email so you can easily access the link on session day!
+      </p>
+    </div>
+    ` : ''}
+
     <div class="request-details">
-      <h3 style="margin-top: 0;">Session Details</h3>
+      <h3 style="margin-top: 0;">📅 Session Details</h3>
+      <div class="detail-row">
+        <span class="detail-label">Date & Time:</span>
+        <span><strong>${formatDateTime(data.proposedStart)}</strong></span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">End Time:</span>
+        <span>${formatDateTime(data.proposedEnd)}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Timezone:</span>
+        <span>${data.timezone}</span>
+      </div>
       <div class="detail-row">
         <span class="detail-label">Service:</span>
         <span>${data.listingTitle}</span>
@@ -884,16 +931,228 @@ export function generateRequestAcceptedAthleteEmail(data: BookingRequestEmailDat
       </div>
       ` : ''}
       <div class="detail-row">
-        <span class="detail-label">Price:</span>
+        <span class="detail-label">Amount Paid:</span>
         <span class="price">${formatCurrency(data.priceCents)}</span>
       </div>
     </div>
-    
+
+    <div class="next-steps">
+      <h3 style="margin-top: 0; color: #007bff;">Before Your Session</h3>
+      <ul style="margin: 0; padding-left: 20px;">
+        <li>Make sure you have Zoom installed on your device</li>
+        <li>Test your camera and microphone beforehand</li>
+        <li>Join the meeting 5 minutes early if possible</li>
+        <li>Prepare any questions or topics you want to discuss</li>
+      </ul>
+      <div style="margin-top: 16px;">
+        ${data.zoomJoinUrl ? `<a href="${data.zoomJoinUrl}" class="button" style="background: #F45A14;">🎥 Join Meeting</a>` : ''}
+        ${data.chatUrl ? `<a href="${data.chatUrl}" class="button">💬 Message Coach</a>` : ''}
+      </div>
+    </div>
+
+    <p>We're excited for you to work with ${data.coachName}. Have a great session!</p>
+
+    <div class="footer">
+      <p>Thank you for choosing TeachTape!</p>
+      <p style="font-size: 12px; color: #999;">
+        This is an automated confirmation email. Please keep it for your records.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `
+SESSION CONFIRMED - TeachTape
+
+Hi${data.athleteName ? ` ${data.athleteName}` : ''},
+
+Great news! ${data.coachName} has accepted your coaching request and your session is confirmed.
+
+${data.zoomJoinUrl ? `
+🎥 JOIN YOUR ZOOM MEETING:
+${data.zoomJoinUrl}
+
+Save this link so you can easily access it on session day!
+
+` : ''}SESSION DETAILS:
+- Date & Time: ${formatDateTime(data.proposedStart)}
+- End Time: ${formatDateTime(data.proposedEnd)}
+- Timezone: ${data.timezone}
+- Service: ${data.listingTitle}
+- Coach: ${data.coachName}
+${data.duration ? `- Duration: ${data.duration} minutes\n` : ''}- Amount Paid: ${formatCurrency(data.priceCents)}
+
+BEFORE YOUR SESSION:
+- Make sure you have Zoom installed on your device
+- Test your camera and microphone beforehand
+- Join the meeting 5 minutes early if possible
+- Prepare any questions or topics you want to discuss
+
+${data.chatUrl ? `Message Coach: ${data.chatUrl}\n` : ''}
+We're excited for you to work with ${data.coachName}. Have a great session!
+
+Thank you for choosing TeachTape!
+
+---
+This is an automated confirmation email. Please keep it for your records.
+`;
+
+  return { subject, html, text };
+}
+
+/**
+ * Email template for coach when their accepted booking is confirmed
+ */
+export function generateRequestAcceptedCoachEmail(data: BookingRequestEmailData): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+  const formatDateTime = (date: Date) => date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  const subject = `Session Confirmed: ${data.listingTitle} with ${data.athleteName || 'Athlete'}`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Session Confirmed - TeachTape</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+    .container {
+      background: white;
+      border-radius: 8px;
+      padding: 32px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid #28a745;
+    }
+    .success-badge {
+      background: #d4edda;
+      color: #155724;
+      padding: 12px 20px;
+      border-radius: 6px;
+      margin-bottom: 24px;
+      text-align: center;
+      font-weight: bold;
+    }
+    .zoom-section {
+      background: linear-gradient(135deg, #123C7A, #1E5BB5);
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+      text-align: center;
+    }
+    .zoom-button {
+      display: inline-block;
+      background: white;
+      color: #123C7A;
+      padding: 16px 32px;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 18px;
+      margin: 12px 0;
+    }
+    .request-details {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .detail-label {
+      font-weight: bold;
+      color: #666;
+    }
+    .earnings {
+      font-size: 18px;
+      font-weight: bold;
+      color: #28a745;
+    }
+    .next-steps {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 16px 20px;
+      margin: 24px 0;
+    }
+    .button {
+      display: inline-block;
+      background: #123C7A;
+      color: white;
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      margin: 8px 4px;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid #eee;
+      color: #666;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>TeachTape</h1>
+    </div>
+
+    <div class="success-badge">
+      ✅ Session Confirmed & Payment Received!
+    </div>
+
+    <p>Hi ${data.coachName},</p>
+
+    <p>Your session with ${data.athleteName || 'your athlete'} is confirmed. The payment has been processed and you're all set!</p>
+
+    ${data.zoomJoinUrl ? `
+    <div class="zoom-section">
+      <h2 style="color: white; margin: 0 0 8px 0;">🎥 Your Zoom Meeting</h2>
+      <p style="color: white; margin: 0 0 16px 0; opacity: 0.9;">Click below to join the session when it's time:</p>
+      <a href="${data.zoomJoinUrl}" class="zoom-button">Join Meeting</a>
+      <p style="color: white; margin: 16px 0 0 0; font-size: 14px; opacity: 0.8;">
+        The meeting will be ready at the scheduled time.
+      </p>
+    </div>
+    ` : ''}
+
     <div class="request-details">
-      <h3 style="margin-top: 0;">Scheduled Time</h3>
+      <h3 style="margin-top: 0;">📅 Session Details</h3>
       <div class="detail-row">
         <span class="detail-label">Date & Time:</span>
-        <span>${formatDateTime(data.proposedStart)}</span>
+        <span><strong>${formatDateTime(data.proposedStart)}</strong></span>
       </div>
       <div class="detail-row">
         <span class="detail-label">End Time:</span>
@@ -903,25 +1162,50 @@ export function generateRequestAcceptedAthleteEmail(data: BookingRequestEmailDat
         <span class="detail-label">Timezone:</span>
         <span>${data.timezone}</span>
       </div>
+      <div class="detail-row">
+        <span class="detail-label">Service:</span>
+        <span>${data.listingTitle}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Athlete:</span>
+        <span>${data.athleteName || 'Not provided'}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Athlete Email:</span>
+        <span>${data.athleteEmail}</span>
+      </div>
+      ${data.duration ? `
+      <div class="detail-row">
+        <span class="detail-label">Duration:</span>
+        <span>${data.duration} minutes</span>
+      </div>
+      ` : ''}
+      <div class="detail-row">
+        <span class="detail-label">You'll Earn:</span>
+        <span class="earnings">${formatCurrency(data.priceCents)}</span>
+      </div>
     </div>
-    
+
     <div class="next-steps">
-      <h3 style="margin-top: 0; color: #007bff;">What's Next?</h3>
+      <h3 style="margin-top: 0; color: #856404;">Before the Session</h3>
       <ul style="margin: 0; padding-left: 20px;">
-        <li>Your payment has been processed successfully</li>
-        <li>${data.coachName} will contact you with session details</li>
-        <li>Check your email for any follow-up messages</li>
-        <li>Come prepared with specific questions or focus areas</li>
+        <li>Review any notes or materials the athlete may have shared</li>
+        <li>Prepare your coaching agenda for the session</li>
+        <li>Test your camera and microphone</li>
+        <li>Join the meeting on time to greet your athlete</li>
       </ul>
-      ${data.chatUrl ? `<a href="${data.chatUrl}" class="button">Continue Chat with Coach</a>` : ''}
+      <div style="margin-top: 16px;">
+        ${data.zoomJoinUrl ? `<a href="${data.zoomJoinUrl}" class="button" style="background: #123C7A;">🎥 Join Meeting</a>` : ''}
+        ${data.chatUrl ? `<a href="${data.chatUrl}" class="button" style="background: #F45A14;">💬 Message Athlete</a>` : ''}
+      </div>
     </div>
-    
-    <p>Your session is confirmed! We're excited for you to work with ${data.coachName}.</p>
-    
+
+    <p>Have a great session! Your athlete is looking forward to working with you.</p>
+
     <div class="footer">
-      <p>Thank you for choosing TeachTape!</p>
+      <p>Happy coaching!</p>
       <p style="font-size: 12px; color: #999;">
-        This is an automated confirmation email.
+        Payment will be transferred to your Stripe account according to your payout schedule.
       </p>
     </div>
   </div>
@@ -929,34 +1213,40 @@ export function generateRequestAcceptedAthleteEmail(data: BookingRequestEmailDat
 </html>`;
 
   const text = `
-REQUEST ACCEPTED - TeachTape
+SESSION CONFIRMED - TeachTape
 
-Hi${data.athleteName ? ` ${data.athleteName}` : ''},
+Hi ${data.coachName},
 
-Great news! ${data.coachName} has accepted your coaching request.
+Your session with ${data.athleteName || 'your athlete'} is confirmed. The payment has been processed and you're all set!
 
-SESSION DETAILS:
-- Service: ${data.listingTitle}
-- Coach: ${data.coachName}
-${data.duration ? `- Duration: ${data.duration} minutes\n` : ''}- Price: ${formatCurrency(data.priceCents)}
+${data.zoomJoinUrl ? `
+🎥 JOIN YOUR ZOOM MEETING:
+${data.zoomJoinUrl}
 
-SCHEDULED TIME:
+The meeting will be ready at the scheduled time.
+
+` : ''}SESSION DETAILS:
 - Date & Time: ${formatDateTime(data.proposedStart)}
 - End Time: ${formatDateTime(data.proposedEnd)}
 - Timezone: ${data.timezone}
+- Service: ${data.listingTitle}
+- Athlete: ${data.athleteName || 'Not provided'}
+- Athlete Email: ${data.athleteEmail}
+${data.duration ? `- Duration: ${data.duration} minutes\n` : ''}- You'll Earn: ${formatCurrency(data.priceCents)}
 
-WHAT'S NEXT:
-- Your payment has been processed successfully
-- ${data.coachName} will contact you with session details
-- Check your email for any follow-up messages
-- Come prepared with specific questions or focus areas
+BEFORE THE SESSION:
+- Review any notes or materials the athlete may have shared
+- Prepare your coaching agenda for the session
+- Test your camera and microphone
+- Join the meeting on time to greet your athlete
 
-${data.chatUrl ? `Continue Chat with Coach: ${data.chatUrl}\n\n` : ''}Your session is confirmed! We're excited for you to work with ${data.coachName}.
+${data.chatUrl ? `Message Athlete: ${data.chatUrl}\n` : ''}
+Have a great session! Your athlete is looking forward to working with you.
 
-Thank you for choosing TeachTape!
+Happy coaching!
 
 ---
-This is an automated confirmation email.
+Payment will be transferred to your Stripe account according to your payout schedule.
 `;
 
   return { subject, html, text };
