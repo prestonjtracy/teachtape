@@ -98,7 +98,12 @@ export interface Review {
   athlete_id: string;
   rating: number; // 1-5
   comment: string | null;
+  would_recommend: boolean;
   created_at: string;
+  // Moderation fields
+  is_hidden?: boolean;
+  hidden_at?: string | null;
+  hidden_by?: string | null;
 }
 
 // ==========================================
@@ -190,6 +195,28 @@ export interface ReviewWithAthlete extends Review {
   athlete: {
     full_name: string | null;
   };
+  // Optional service info (from booking -> listing)
+  service_title?: string | null;
+}
+
+// Admin review with full details
+export interface AdminReview extends Review {
+  athlete: {
+    id: string;
+    full_name: string | null;
+  };
+  coach: {
+    id: string;
+    full_name: string | null;
+  };
+  booking?: {
+    listing?: {
+      title: string | null;
+    };
+  };
+  hidden_by_admin?: {
+    full_name: string | null;
+  };
 }
 
 // ==========================================
@@ -244,6 +271,7 @@ export interface CreateReviewInput {
   booking_id: string;
   rating: number;
   comment?: string;
+  would_recommend?: boolean;
 }
 
 export interface ReviewsResponse {

@@ -86,6 +86,10 @@ export const AuditActions = {
   BOOKING_CANCELLED: 'booking_cancelled',
   BOOKING_COMPLETED: 'booking_completed',
 
+  // Review management
+  REVIEW_HIDDEN: 'review_hidden',
+  REVIEW_UNHIDDEN: 'review_unhidden',
+
   // Payment management
   PAYOUT_RETRIED: 'payout_retried',
   PAYMENT_REFUNDED: 'payment_refunded',

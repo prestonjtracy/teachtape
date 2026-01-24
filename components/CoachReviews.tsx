@@ -1,7 +1,28 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ReviewsResponse } from '@/types/db';
+
+interface ReviewWithDetails {
+  id: string;
+  booking_id: string;
+  coach_id: string;
+  athlete_id: string;
+  rating: number;
+  comment: string | null;
+  would_recommend: boolean | null;
+  created_at: string;
+  athlete: {
+    full_name: string | null;
+  };
+  service_title: string | null;
+}
+
+interface ReviewsResponseWithDetails {
+  reviews: ReviewWithDetails[];
+  averageRating: number;
+  totalReviews: number;
+  recommendationRate?: number;
+}
 
 interface CoachReviewsProps {
   coachId: string;
@@ -9,7 +30,7 @@ interface CoachReviewsProps {
 }
 
 export default function CoachReviews({ coachId, coachName }: CoachReviewsProps) {
-  const [data, setData] = useState<ReviewsResponse | null>(null);
+  const [data, setData] = useState<ReviewsResponseWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,7 +91,7 @@ export default function CoachReviews({ coachId, coachName }: CoachReviewsProps) 
     );
   }
 
-  const { reviews, averageRating, totalReviews } = data;
+  const { reviews, averageRating, totalReviews, recommendationRate } = data;
 
   // Helper to render stars
   const renderStars = (rating: number, size: 'sm' | 'lg' = 'sm') => {
@@ -108,17 +129,25 @@ export default function CoachReviews({ coachId, coachName }: CoachReviewsProps) 
 
         {/* Average Rating Summary */}
         <div className="bg-white rounded-xl shadow-sm ring-1 ring-black/5 p-6 mb-6">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-6">
             <div className="text-center">
               <div className="text-4xl font-bold text-ttBlue mb-1">
                 {averageRating.toFixed(1)}
               </div>
               {renderStars(Math.round(averageRating), 'lg')}
             </div>
-            <div className="border-l border-gray-200 pl-4">
+            <div className="border-l border-gray-200 pl-6">
               <p className="text-sm text-neutral-text-secondary">
                 Based on {totalReviews} review{totalReviews !== 1 ? 's' : ''}
               </p>
+              {recommendationRate !== undefined && recommendationRate > 0 && (
+                <p className="text-sm text-green-600 mt-1 flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                  </svg>
+                  {recommendationRate}% would recommend
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -132,17 +161,31 @@ export default function CoachReviews({ coachId, coachName }: CoachReviewsProps) 
             className="bg-white rounded-xl shadow-sm ring-1 ring-black/5 p-6"
           >
             <div className="flex items-start justify-between mb-3">
-              <div>
+              <div className="flex-1">
                 <div className="flex items-center gap-3 mb-1">
                   <span className="font-semibold text-neutral-text">
                     {getFirstName(review.athlete.full_name)}
                   </span>
                   {renderStars(review.rating)}
                 </div>
-                <span className="text-xs text-neutral-text-muted">
-                  {formatDate(review.created_at)}
-                </span>
+                <div className="flex items-center gap-2 text-xs text-neutral-text-muted">
+                  <span>{formatDate(review.created_at)}</span>
+                  {review.service_title && (
+                    <>
+                      <span>•</span>
+                      <span className="text-[#123C7A]">{review.service_title}</span>
+                    </>
+                  )}
+                </div>
               </div>
+              {review.would_recommend && (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                  </svg>
+                  Recommends
+                </span>
+              )}
             </div>
 
             {review.comment && (
