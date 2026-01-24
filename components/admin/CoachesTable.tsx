@@ -60,7 +60,9 @@ export default function CoachesTable({ initialCoaches }: CoachesTableProps) {
         body: JSON.stringify({ coachId, action })
       })
 
-      if (response.ok) {
+      const data = await response.json()
+
+      if (response.ok && data.success) {
         // Update local state immediately for instant UI feedback
         setCoaches(prevCoaches => prevCoaches.map(coach => {
           if (coach.id !== coachId) return coach
@@ -79,14 +81,16 @@ export default function CoachesTable({ initialCoaches }: CoachesTableProps) {
           }
         }).filter(coach => action !== 'delete' || coach.id !== coachId))
 
-        // Also refresh the page data for any server-side changes
+        // Also refresh the page data to sync with database
         router.refresh()
       } else {
-        const data = await response.json()
-        alert(data.error || 'Error performing action')
+        const errorMessage = data.error || 'Error performing action'
+        console.error(`Coach ${action} failed:`, errorMessage)
+        alert(`Failed to ${action} coach: ${errorMessage}`)
       }
     } catch (error) {
-      alert('Error performing action')
+      console.error(`Coach ${action} error:`, error)
+      alert(`Network error while trying to ${action} coach. Please try again.`)
     } finally {
       setLoading(false)
     }

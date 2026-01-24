@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { logAdminAction, AuditActions } from '@/lib/auditLog'
 import { requireAdmin } from '@/lib/auth/server'
@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }
 
-    const supabase = await createClient()
+    // Use admin client for database operations (bypasses RLS after admin verification)
+    const supabase = createAdminClient()
     const profile = user.profile!
 
     // SECURITY: Validate that coach exists before performing any action (IDOR protection)
@@ -34,32 +35,33 @@ export async function POST(request: NextRequest) {
         // Get coach info for audit log
         const { data: coachToVerify } = await supabase
           .from('coaches')
-          .select('full_name, profile_id')
+          .select('full_name, profile_id, verified_at')
           .eq('id', coachId)
           .single()
 
-        // Try to update with verified_at column first
-        const { error: verifyError } = await supabase
+        // Update with verified_at timestamp and return the updated row to confirm
+        const { data: verifiedCoach, error: verifyError } = await supabase
           .from('coaches')
           .update({
             is_public: true,
             verified_at: new Date().toISOString()
           })
           .eq('id', coachId)
+          .select('id, verified_at')
+          .single()
 
         if (verifyError) {
           console.error('Verify update error:', verifyError)
-          // If verified_at column doesn't exist, try with just is_public
-          const { error: fallbackError } = await supabase
-            .from('coaches')
-            .update({ is_public: true })
-            .eq('id', coachId)
-
-          if (fallbackError) {
-            console.error('Verify fallback error:', fallbackError)
-            return NextResponse.json({ error: 'Failed to verify coach: ' + fallbackError.message }, { status: 500 })
-          }
+          return NextResponse.json({ error: 'Failed to verify coach: ' + verifyError.message }, { status: 500 })
         }
+
+        // Confirm the update actually worked
+        if (!verifiedCoach || !verifiedCoach.verified_at) {
+          console.error('Verify update failed - no data returned:', { coachId, verifiedCoach })
+          return NextResponse.json({ error: 'Verification update failed - please try again' }, { status: 500 })
+        }
+
+        console.log('Coach verified successfully:', { coachId, verified_at: verifiedCoach.verified_at })
 
         // Log the action
         await logAdminAction(user.id, {
@@ -69,7 +71,8 @@ export async function POST(request: NextRequest) {
           targetIdentifier: coachToVerify?.full_name || 'Unknown Coach',
           details: {
             previous_status: 'unverified',
-            new_status: 'verified'
+            new_status: 'verified',
+            verified_at: verifiedCoach.verified_at
           }
         })
         break
