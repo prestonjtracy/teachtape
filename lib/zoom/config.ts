@@ -30,7 +30,7 @@ export const ZOOM_MEETING_DEFAULTS = {
     participant_video: true,
     cn_meeting: false,
     in_meeting: false,
-    join_before_host: false,
+    join_before_host: true, // Allow participants to join without waiting for host
     mute_upon_entry: true,
     watermark: false,
     use_pmi: false,
@@ -41,7 +41,7 @@ export const ZOOM_MEETING_DEFAULTS = {
     enforce_login_domains: '',
     alternative_hosts: '',
     registrants_email_notification: false,
-    waiting_room: true, // Enable waiting room for security
+    waiting_room: false, // Disabled - allow direct entry for coaching sessions
     allow_multiple_devices: true,
   }
 } as const
