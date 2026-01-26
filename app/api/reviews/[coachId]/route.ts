@@ -19,7 +19,7 @@ export async function GET(
 
     const supabase = await createClient();
 
-    // Fetch visible reviews for this coach with athlete info
+    // Fetch visible reviews for this coach
     // Filter out hidden reviews for public display
     const { data: reviews, error: reviewsError } = await supabase
       .from('reviews')
@@ -31,10 +31,7 @@ export async function GET(
         rating,
         comment,
         would_recommend,
-        created_at,
-        athlete:athlete_id (
-          full_name
-        )
+        created_at
       `)
       .eq('coach_id', validCoachId)
       .or('is_hidden.is.null,is_hidden.eq.false') // Filter out hidden reviews
@@ -47,6 +44,25 @@ export async function GET(
         error: "Failed to fetch reviews",
         details: reviewsError.message
       }, { status: 500 });
+    }
+
+    // Fetch athlete profiles separately to get names
+    const athleteIds = (reviews || [])
+      .filter(r => r.athlete_id)
+      .map(r => r.athlete_id);
+
+    let athleteNames = new Map<string, string>();
+    if (athleteIds.length > 0) {
+      const { data: athletes, error: athletesError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', athleteIds);
+
+      if (athletesError) {
+        console.warn('⚠️ [GET /api/reviews] Failed to fetch athlete names:', athletesError.message);
+      } else {
+        athleteNames = new Map((athletes || []).map(a => [a.id, a.full_name]));
+      }
     }
 
     // Get booking IDs to fetch service/listing titles
@@ -84,6 +100,7 @@ export async function GET(
     const transformedReviews = (reviews || []).map(review => {
       const listingId = bookingToListing.get(review.booking_id);
       const serviceTitle = listingId ? listingTitles.get(listingId) : null;
+      const athleteName = review.athlete_id ? athleteNames.get(review.athlete_id) : null;
 
       return {
         id: review.id,
@@ -95,7 +112,7 @@ export async function GET(
         would_recommend: review.would_recommend,
         created_at: review.created_at,
         athlete: {
-          full_name: (review.athlete as any)?.[0]?.full_name || null
+          full_name: athleteName || null
         },
         service_title: serviceTitle || null
       };
