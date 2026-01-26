@@ -2,6 +2,54 @@
  * Email templates for TeachTape booking confirmations
  */
 
+/**
+ * Format a date in the user's timezone with timezone abbreviation
+ * @param date - The date to format (in UTC)
+ * @param timezone - IANA timezone string (e.g., 'America/Chicago')
+ * @param includeDate - Whether to include the full date or just time
+ * @returns Formatted date string with timezone abbreviation
+ */
+function formatDateTimeInTimezone(date: Date, timezone: string, includeDate: boolean = true): string {
+  try {
+    const options: Intl.DateTimeFormatOptions = includeDate
+      ? {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone: timezone,
+        }
+      : {
+          hour: 'numeric',
+          minute: '2-digit',
+          timeZone: timezone,
+        };
+
+    const formatted = date.toLocaleString('en-US', options);
+
+    // Get timezone abbreviation (e.g., CST, EST, PST)
+    const tzAbbr = date.toLocaleString('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'short',
+    }).split(' ').pop() || timezone;
+
+    return `${formatted} ${tzAbbr}`;
+  } catch (error) {
+    // Fallback to ISO string if timezone is invalid
+    console.error(`Invalid timezone: ${timezone}`, error);
+    return date.toISOString();
+  }
+}
+
+/**
+ * Format just the time portion in the user's timezone
+ */
+function formatTimeInTimezone(date: Date, timezone: string): string {
+  return formatDateTimeInTimezone(date, timezone, false);
+}
+
 export interface BookingEmailData {
   // Booking details
   sessionId: string;
@@ -533,14 +581,9 @@ export function generateNewRequestCoachEmail(data: BookingRequestEmailData): {
   text: string;
 } {
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-  const formatDateTime = (date: Date) => date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  // Use timezone-aware formatting
+  const formatDateTime = (date: Date) => formatDateTimeInTimezone(date, data.timezone);
+  const formatTime = (date: Date) => formatTimeInTimezone(date, data.timezone);
 
   const subject = `New Coaching Request: ${data.listingTitle} from ${data.athleteName || data.athleteEmail}`;
 
@@ -761,14 +804,9 @@ export function generateRequestAcceptedAthleteEmail(data: BookingRequestEmailDat
   text: string;
 } {
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-  const formatDateTime = (date: Date) => date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  // Use timezone-aware formatting
+  const formatDateTime = (date: Date) => formatDateTimeInTimezone(date, data.timezone);
+  const formatTime = (date: Date) => formatTimeInTimezone(date, data.timezone);
 
   const subject = `Session Confirmed: ${data.listingTitle} with ${data.coachName}`;
 
@@ -1010,14 +1048,9 @@ export function generateRequestAcceptedCoachEmail(data: BookingRequestEmailData)
   text: string;
 } {
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-  const formatDateTime = (date: Date) => date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  // Use timezone-aware formatting
+  const formatDateTime = (date: Date) => formatDateTimeInTimezone(date, data.timezone);
+  const formatTime = (date: Date) => formatTimeInTimezone(date, data.timezone);
 
   const subject = `Session Confirmed: ${data.listingTitle} with ${data.athleteName || 'Athlete'}`;
 
@@ -1261,14 +1294,9 @@ export function generateRequestDeclinedAthleteEmail(data: BookingRequestEmailDat
   text: string;
 } {
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-  const formatDateTime = (date: Date) => date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  // Use timezone-aware formatting
+  const formatDateTime = (date: Date) => formatDateTimeInTimezone(date, data.timezone);
+  const formatTime = (date: Date) => formatTimeInTimezone(date, data.timezone);
 
   const subject = `Coaching Request Update: ${data.listingTitle}`;
 
@@ -1447,14 +1475,9 @@ export function generateRequestExpiredAthleteEmail(data: BookingRequestEmailData
   text: string;
 } {
   const formatCurrency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-  const formatDateTime = (date: Date) => date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  // Use timezone-aware formatting
+  const formatDateTime = (date: Date) => formatDateTimeInTimezone(date, data.timezone);
+  const formatTime = (date: Date) => formatTimeInTimezone(date, data.timezone);
 
   const subject = `Coaching Request Expired: ${data.listingTitle}`;
 
