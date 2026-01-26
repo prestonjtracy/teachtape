@@ -84,11 +84,19 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
   const origin = request.headers.get('origin')
 
+  // CRITICAL: Webhook endpoints must bypass ALL middleware processing
+  // They are server-to-server calls without auth cookies or CORS requirements
+  // Matching: /api/zoom/webhook, /api/stripe/webhook, etc.
+  if (path.includes('/webhook')) {
+    console.log(`[Middleware] Webhook detected, bypassing middleware: ${path}`)
+    return NextResponse.next()
+  }
+
   // CORS Configuration for API routes
   if (path.startsWith('/api/')) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL
 
-    // Webhooks don't need CORS (server-to-server)
+    // This is now a backup check (webhooks already handled above)
     const isWebhook = path.includes('/webhook')
 
     // Handle preflight OPTIONS requests
