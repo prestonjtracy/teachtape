@@ -30,9 +30,20 @@ interface Coach {
 interface Review {
   id: string;
   rating: number;
-  comment: string;
+  comment: string | null;
+  would_recommend: boolean | null;
   created_at: string;
-  athlete_name: string;
+  athlete: {
+    full_name: string | null;
+  };
+  service_title: string | null;
+}
+
+interface ReviewsResponse {
+  reviews: Review[];
+  averageRating: number;
+  totalReviews: number;
+  recommendationRate: number;
 }
 
 interface CoachPageClientProps {
@@ -47,6 +58,7 @@ export default function CoachPageClient({ coach }: CoachPageClientProps) {
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [recommendationRate, setRecommendationRate] = useState<number>(0);
 
   // Get booking flow from environment (default to 'request')
   const bookingFlow = (process.env.NEXT_PUBLIC_BOOKING_FLOW as 'legacy' | 'request') || 'request';
@@ -55,10 +67,11 @@ export default function CoachPageClient({ coach }: CoachPageClientProps) {
   useEffect(() => {
     async function fetchReviews() {
       try {
-        const response = await fetch(`/api/coaches/${coach.id}/reviews`);
+        const response = await fetch(`/api/reviews/${coach.id}`);
         if (response.ok) {
-          const data = await response.json();
+          const data: ReviewsResponse = await response.json();
           setReviews(data.reviews || []);
+          setRecommendationRate(data.recommendationRate || 0);
         }
       } catch (error) {
         console.error('Failed to fetch reviews:', error);
@@ -505,47 +518,85 @@ export default function CoachPageClient({ coach }: CoachPageClientProps) {
             {reviews.length > 0 && (
               <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="p-6 border-b border-gray-100">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
                     <h2 className="text-xl font-bold text-[#123C7A] flex items-center gap-2">
                       <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                       </svg>
                       Reviews
                     </h2>
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl font-bold text-[#123C7A]">{averageRating.toFixed(1)}</span>
-                      <div className="text-sm text-gray-500">({reviews.length} review{reviews.length !== 1 ? 's' : ''})</div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl font-bold text-[#123C7A]">{averageRating.toFixed(1)}</span>
+                        <div className="text-sm text-gray-500">({reviews.length} review{reviews.length !== 1 ? 's' : ''})</div>
+                      </div>
+                      {recommendationRate > 0 && (
+                        <div className="flex items-center gap-1 text-sm text-green-600">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                          </svg>
+                          <span>{recommendationRate}% recommend</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
                 <div className="p-6">
                   <div className="space-y-6">
-                    {reviews.slice(0, 5).map((review) => (
-                      <div key={review.id} className="pb-6 border-b border-gray-100 last:border-0 last:pb-0">
-                        <div className="flex items-start gap-4">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#123C7A] to-[#1E5BB5] flex items-center justify-center flex-shrink-0">
-                            <span className="text-white font-semibold text-sm">
-                              {review.athlete_name?.charAt(0).toUpperCase() || 'A'}
-                            </span>
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-semibold text-gray-900">{review.athlete_name || 'Athlete'}</span>
-                              <span className="text-sm text-gray-400">
-                                {new Date(review.created_at).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric'
-                                })}
+                    {reviews.slice(0, 10).map((review) => {
+                      const athleteName = review.athlete?.full_name || 'Athlete';
+                      const firstNameOnly = athleteName.split(' ')[0];
+                      return (
+                        <div key={review.id} className="pb-6 border-b border-gray-100 last:border-0 last:pb-0">
+                          <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#123C7A] to-[#1E5BB5] flex items-center justify-center flex-shrink-0">
+                              <span className="text-white font-semibold text-sm">
+                                {athleteName.charAt(0).toUpperCase()}
                               </span>
                             </div>
-                            <div className="mb-2">{renderStars(review.rating)}</div>
-                            <p className="text-gray-600">{review.comment}</p>
+                            <div className="flex-1">
+                              <div className="flex items-start justify-between mb-1 gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold text-gray-900">{firstNameOnly}</span>
+                                  {review.would_recommend && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                      Recommends
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-sm text-gray-400 whitespace-nowrap">
+                                  {new Date(review.created_at).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 mb-2">
+                                {renderStars(review.rating)}
+                                {review.service_title && (
+                                  <span className="text-xs text-[#123C7A] bg-blue-50 px-2 py-0.5 rounded-full">
+                                    {review.service_title}
+                                  </span>
+                                )}
+                              </div>
+                              {review.comment && (
+                                <p className="text-gray-600">{review.comment}</p>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
+                  {reviews.length > 10 && (
+                    <p className="text-center text-sm text-gray-500 mt-4">
+                      Showing 10 most recent reviews
+                    </p>
+                  )}
                 </div>
               </section>
             )}

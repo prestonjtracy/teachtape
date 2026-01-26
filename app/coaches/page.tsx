@@ -79,11 +79,12 @@ export default async function CoachesPage() {
           .select("id, title, price_cents, is_active")
           .eq("coach_id", profile.id);
 
-        // Get reviews for this coach
+        // Get reviews for this coach (filter out hidden reviews)
         const { data: reviews } = await supabase
           .from("reviews")
           .select("rating")
-          .eq("coach_id", profile.id);
+          .eq("coach_id", profile.id)
+          .or('is_hidden.is.null,is_hidden.eq.false');
 
         return {
           ...profile,
