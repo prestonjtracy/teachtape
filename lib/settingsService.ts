@@ -3,7 +3,7 @@
  * Provides functions to read and update platform settings
  */
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
 export interface CommissionSettings {
@@ -29,9 +29,11 @@ export const CommissionSettingsUpdateSchema = z.object({
 
 /**
  * Get current commission settings with safe defaults
+ * Uses admin client to bypass RLS - commission settings need to be read
+ * during checkout for any user (athlete or coach)
  */
 export async function getCommissionSettings(): Promise<CommissionSettings> {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   
   try {
     // Get commission-related settings
