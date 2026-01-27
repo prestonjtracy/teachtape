@@ -3,7 +3,7 @@ import { createClientForApiRoute, createAdminClient } from "@/lib/supabase/serve
 import Stripe from "stripe";
 import { z } from "zod";
 import { sendBookingRequestEmails } from "@/lib/email";
-import { createMeeting, deleteMeeting } from "@/lib/zoom/api";
+import { createMeeting, deleteMeeting, appendZoomDisplayName } from "@/lib/zoom/api";
 
 export const dynamic = 'force-dynamic';
 
@@ -393,6 +393,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // User will be notified in the system message to schedule manually
     }
 
+    // Create personalized URLs with participant names for better tracking in Zoom webhooks
+    const athleteJoinUrl = zoomJoinUrl
+      ? appendZoomDisplayName(zoomJoinUrl, bookingRequest.athlete.full_name || 'Athlete')
+      : null;
+    const coachStartUrl = zoomStartUrl
+      ? appendZoomDisplayName(zoomStartUrl, bookingRequest.coach.full_name || 'Coach')
+      : null;
+
     // Track if Zoom failed so we can notify user
     const zoomFailed = !zoomJoinUrl;
 
@@ -410,8 +418,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         starts_at: bookingRequest.proposed_start,
         ends_at: bookingRequest.proposed_end,
         stripe_session_id: paymentIntent.id, // Use payment_intent_id as session_id for Connect payments
-        zoom_join_url: zoomJoinUrl,
-        zoom_start_url: zoomStartUrl,
+        zoom_join_url: athleteJoinUrl,
+        zoom_start_url: coachStartUrl,
         zoom_meeting_id: zoomMeetingId,
       })
       .select('id')
@@ -488,8 +496,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       ends_at: bookingRequest.proposed_end,
       timezone: bookingRequest.timezone,
       listing_title: bookingRequest.listing.title,
-      athlete_join_url: zoomJoinUrl,
-      coach_start_url: zoomStartUrl,
+      athlete_join_url: athleteJoinUrl,
+      coach_start_url: coachStartUrl,
       amount_paid_cents: bookingRequest.listing.price_cents
     };
 
@@ -514,7 +522,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         timeZone: bookingRequest.timezone,
       });
 
-      systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate} - ${sessionEndTime}\n\n[🎥 Join Meeting](${zoomJoinUrl})`;
+      systemMessage += `\n\n🎥 **Zoom Meeting Ready**\n📅 ${sessionDate} - ${sessionEndTime}\n\n[🎥 Join Meeting](${athleteJoinUrl})`;
     } else if (zoomFailed) {
       // Notify users that Zoom meeting couldn't be created automatically
       systemMessage += `\n\n⚠️ **Note:** Automatic Zoom meeting creation failed. Please coordinate directly to schedule your session.`;
@@ -574,7 +582,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           timezone: bookingRequest.timezone,
           requestedAt: new Date(),
           chatUrl: `${process.env.APP_URL || 'https://teachtape.local'}/messages/${bookingRequest.conversation_id}`,
-          zoomJoinUrl: zoomJoinUrl || undefined
+          zoomJoinUrl: athleteJoinUrl || undefined,
+          zoomCoachUrl: coachStartUrl || undefined
         };
 
         console.log('📧 [POST /api/requests/accept] Sending email to athlete:', athleteEmail);

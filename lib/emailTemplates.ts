@@ -109,8 +109,9 @@ export interface BookingRequestEmailData {
   // Chat link
   chatUrl?: string;
 
-  // Zoom meeting link (for accepted bookings)
-  zoomJoinUrl?: string;
+  // Zoom meeting links (for accepted bookings)
+  zoomJoinUrl?: string;      // Athlete's URL with athlete name
+  zoomCoachUrl?: string;     // Coach's URL with coach name
 }
 
 export interface FilmReviewEmailData {
@@ -1170,11 +1171,11 @@ export function generateRequestAcceptedCoachEmail(data: BookingRequestEmailData)
 
     <p>Your session with ${data.athleteName || 'your athlete'} is confirmed. The payment has been processed and you're all set!</p>
 
-    ${data.zoomJoinUrl ? `
+    ${data.zoomCoachUrl ? `
     <div class="zoom-section">
       <h2 style="color: white; margin: 0 0 8px 0;">🎥 Your Zoom Meeting</h2>
-      <p style="color: white; margin: 0 0 16px 0; opacity: 0.9;">Click below to join the session when it's time:</p>
-      <a href="${data.zoomJoinUrl}" class="zoom-button">Join Meeting</a>
+      <p style="color: white; margin: 0 0 16px 0; opacity: 0.9;">Click below to start the session when it's time:</p>
+      <a href="${data.zoomCoachUrl}" class="zoom-button">Start Meeting</a>
       <p style="color: white; margin: 16px 0 0 0; font-size: 14px; opacity: 0.8;">
         The meeting will be ready at the scheduled time.
       </p>
@@ -1228,7 +1229,7 @@ export function generateRequestAcceptedCoachEmail(data: BookingRequestEmailData)
         <li>Join the meeting on time to greet your athlete</li>
       </ul>
       <div style="margin-top: 16px;">
-        ${data.zoomJoinUrl ? `<a href="${data.zoomJoinUrl}" class="button" style="background: #123C7A;">🎥 Join Meeting</a>` : ''}
+        ${data.zoomCoachUrl ? `<a href="${data.zoomCoachUrl}" class="button" style="background: #123C7A;">🎥 Start Meeting</a>` : ''}
         ${data.chatUrl ? `<a href="${data.chatUrl}" class="button" style="background: #F45A14;">💬 Message Athlete</a>` : ''}
       </div>
     </div>
@@ -1252,9 +1253,9 @@ Hi ${data.coachName},
 
 Your session with ${data.athleteName || 'your athlete'} is confirmed. The payment has been processed and you're all set!
 
-${data.zoomJoinUrl ? `
-🎥 JOIN YOUR ZOOM MEETING:
-${data.zoomJoinUrl}
+${data.zoomCoachUrl ? `
+🎥 START YOUR ZOOM MEETING:
+${data.zoomCoachUrl}
 
 The meeting will be ready at the scheduled time.
 

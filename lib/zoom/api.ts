@@ -177,6 +177,24 @@ export async function deleteMeeting(meetingId: string): Promise<void> {
 }
 
 /**
+ * Append display name to a Zoom URL for participant identification
+ * This helps identify participants in webhook logs instead of showing device names
+ * @param url - The Zoom meeting URL
+ * @param name - The participant's display name
+ * @returns URL with uname parameter appended
+ */
+export function appendZoomDisplayName(url: string, name: string): string {
+  if (!url || !name) return url;
+
+  // URL encode the name (handles spaces, special characters)
+  const encodedName = encodeURIComponent(name.trim());
+
+  // Zoom URLs already have ?pwd=XXX, so use & to append
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}uname=${encodedName}`;
+}
+
+/**
  * Get meeting details
  */
 export async function getMeetingDetails(meetingId: string): Promise<ZoomMeetingDetails | null> {
