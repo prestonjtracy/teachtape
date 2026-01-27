@@ -38,6 +38,12 @@ function formatTurnaround(hours: number): string {
   return `${days}d ${remainingHours}h`;
 }
 
+interface FeeBreakdown {
+  base_price_cents: number;
+  service_fee_cents: number;
+  total_cents: number;
+}
+
 function RequestFilmReviewContent({
   isOpen,
   onClose,
@@ -51,11 +57,12 @@ function RequestFilmReviewContent({
   const [error, setError] = useState('');
   const [needsPaymentMethod, setNeedsPaymentMethod] = useState(true);
   const [success, setSuccess] = useState(false);
+  const [feeBreakdown, setFeeBreakdown] = useState<FeeBreakdown | null>(null);
 
   const stripe = useStripe();
   const elements = useElements();
 
-  // Check if user has saved payment methods on modal open
+  // Check if user has saved payment methods and fetch fee breakdown on modal open
   useEffect(() => {
     if (isOpen) {
       checkPaymentMethods();
@@ -64,8 +71,19 @@ function RequestFilmReviewContent({
       setNotes('');
       setError('');
       setSuccess(false);
+      // Fetch fee breakdown for price transparency
+      if (listing.price_cents > 0) {
+        fetch(`/api/fee-breakdown?price_cents=${listing.price_cents}`)
+          .then(res => res.json())
+          .then(data => {
+            if (!data.error) {
+              setFeeBreakdown(data);
+            }
+          })
+          .catch(err => console.error('Error fetching fee breakdown:', err));
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, listing.price_cents]);
 
   const checkPaymentMethods = async () => {
     try {
@@ -222,13 +240,30 @@ function RequestFilmReviewContent({
             {listing.description && (
               <p className="text-gray-600 text-sm mt-1">{listing.description}</p>
             )}
-            <div className="flex justify-between items-center mt-3">
-              <span className="text-xl font-bold text-[#FF5A1F]">
-                {formatPrice(listing.price_cents)}
-              </span>
-              <span className="text-gray-600">
-                {listing.turnaround_hours && formatTurnaround(listing.turnaround_hours)} turnaround
-              </span>
+            {listing.turnaround_hours && (
+              <div className="mt-3 text-sm text-gray-600">
+                {formatTurnaround(listing.turnaround_hours)} turnaround
+              </div>
+            )}
+
+            {/* Price Breakdown */}
+            <div className="mt-4 pt-3 border-t border-gray-200">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Review price</span>
+                <span>{formatPrice(listing.price_cents)}</span>
+              </div>
+              {feeBreakdown && feeBreakdown.service_fee_cents > 0 && (
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-gray-600">Service fee</span>
+                  <span>{formatPrice(feeBreakdown.service_fee_cents)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold mt-2 pt-2 border-t border-gray-200">
+                <span className="text-[#123C7A]">Total</span>
+                <span className="text-xl text-[#FF5A1F]">
+                  {feeBreakdown ? formatPrice(feeBreakdown.total_cents) : formatPrice(listing.price_cents)}
+                </span>
+              </div>
             </div>
           </div>
 

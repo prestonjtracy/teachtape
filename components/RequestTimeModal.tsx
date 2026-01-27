@@ -50,12 +50,18 @@ const commonTimezones = [
   { value: 'UTC', label: 'UTC' },
 ];
 
-function RequestTimeContent({ 
-  isOpen, 
-  onClose, 
-  coachId, 
-  coachName, 
-  listing 
+interface FeeBreakdown {
+  base_price_cents: number;
+  service_fee_cents: number;
+  total_cents: number;
+}
+
+function RequestTimeContent({
+  isOpen,
+  onClose,
+  coachId,
+  coachName,
+  listing
 }: RequestTimeModalProps) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [selectedTime, setSelectedTime] = useState('09:00');
@@ -64,18 +70,30 @@ function RequestTimeContent({
   const [error, setError] = useState('');
   const [setupIntent, setSetupIntent] = useState<string | null>(null);
   const [needsPaymentMethod, setNeedsPaymentMethod] = useState(false);
+  const [feeBreakdown, setFeeBreakdown] = useState<FeeBreakdown | null>(null);
 
   const stripe = useStripe();
   const elements = useElements();
 
   const formatPrice = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
-  // Check if user has saved payment methods on modal open
+  // Fetch fee breakdown and check payment methods on modal open
   useEffect(() => {
     if (isOpen) {
       checkPaymentMethods();
+      // Fetch fee breakdown for price transparency
+      if (listing.price_cents > 0) {
+        fetch(`/api/fee-breakdown?price_cents=${listing.price_cents}`)
+          .then(res => res.json())
+          .then(data => {
+            if (!data.error) {
+              setFeeBreakdown(data);
+            }
+          })
+          .catch(err => console.error('Error fetching fee breakdown:', err));
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, listing.price_cents]);
 
   const checkPaymentMethods = async () => {
     try {
@@ -213,13 +231,28 @@ function RequestTimeContent({
             {listing.description && (
               <p className="text-gray-600 text-sm mt-1">{listing.description}</p>
             )}
-            <div className="flex justify-between items-center mt-3">
-              <span className="text-xl font-bold text-[#FF5A1F]">
-                {formatPrice(listing.price_cents)}
-              </span>
-              <span className="text-gray-600">
-                {listing.duration_minutes} minutes
-              </span>
+            <div className="mt-3 text-sm text-gray-600">
+              {listing.duration_minutes} minutes
+            </div>
+
+            {/* Price Breakdown */}
+            <div className="mt-4 pt-3 border-t border-gray-200">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Session price</span>
+                <span>{formatPrice(listing.price_cents)}</span>
+              </div>
+              {feeBreakdown && feeBreakdown.service_fee_cents > 0 && (
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-gray-600">Service fee</span>
+                  <span>{formatPrice(feeBreakdown.service_fee_cents)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold mt-2 pt-2 border-t border-gray-200">
+                <span className="text-[#123C7A]">Total</span>
+                <span className="text-xl text-[#FF5A1F]">
+                  {feeBreakdown ? formatPrice(feeBreakdown.total_cents) : formatPrice(listing.price_cents)}
+                </span>
+              </div>
             </div>
           </div>
 
