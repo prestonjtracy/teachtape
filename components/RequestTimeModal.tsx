@@ -24,6 +24,9 @@ interface RequestTimeModalProps {
   listing: Listing;
 }
 
+// Minimum lead time in minutes - coaches need time to prepare
+const MINIMUM_LEAD_TIME_MINUTES = 30;
+
 // Time options for the dropdown (in 15-minute intervals)
 const timeOptions = Array.from({ length: 96 }, (_, i) => {
   const minutes = i * 15;
@@ -36,6 +39,33 @@ const timeOptions = Array.from({ length: 96 }, (_, i) => {
     label: `${hour12}:${String(mins).padStart(2, '0')} ${ampm}`
   };
 });
+
+/**
+ * Get available time options based on selected date
+ * For today: only show times at least MINIMUM_LEAD_TIME_MINUTES in the future
+ * For future dates: show all time slots
+ */
+const getAvailableTimeOptions = (selectedDate: Date | undefined) => {
+  if (!selectedDate) return timeOptions;
+
+  const now = new Date();
+  const isToday = selectedDate.toDateString() === now.toDateString();
+
+  if (!isToday) return timeOptions;
+
+  // For today, filter out past times + lead time
+  const cutoffTime = new Date(now.getTime() + MINIMUM_LEAD_TIME_MINUTES * 60 * 1000);
+  const cutoffHours = cutoffTime.getHours();
+  const cutoffMinutes = cutoffTime.getMinutes();
+
+  return timeOptions.filter(option => {
+    const [hours, minutes] = option.value.split(':').map(Number);
+    // Compare as total minutes from midnight
+    const optionTotalMinutes = hours * 60 + minutes;
+    const cutoffTotalMinutes = cutoffHours * 60 + cutoffMinutes;
+    return optionTotalMinutes >= cutoffTotalMinutes;
+  });
+};
 
 // Timezone detection and options
 const detectTimezone = () => {
@@ -105,6 +135,18 @@ function RequestTimeContent({
       setNeedsPaymentMethod(true); // Assume we need to collect payment method
     }
   };
+
+  // Reset time selection when date changes if current time is no longer available
+  useEffect(() => {
+    if (selectedDate) {
+      const availableOptions = getAvailableTimeOptions(selectedDate);
+      const isCurrentTimeAvailable = availableOptions.some(opt => opt.value === selectedTime);
+
+      if (!isCurrentTimeAvailable && availableOptions.length > 0) {
+        setSelectedTime(availableOptions[0].value);
+      }
+    }
+  }, [selectedDate, selectedTime]);
 
   const handleSubmit = async () => {
     if (!selectedDate) {
@@ -200,8 +242,8 @@ function RequestTimeContent({
 
   if (!isOpen) return null;
 
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Start of today
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -274,7 +316,7 @@ function RequestTimeContent({
                   mode="single"
                   selected={selectedDate}
                   onSelect={setSelectedDate}
-                  disabled={{ before: tomorrow }}
+                  disabled={{ before: today }}
                   className="rdp-caption_center"
                 />
               </div>
@@ -286,17 +328,32 @@ function RequestTimeContent({
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Select Time
                 </label>
-                <select
-                  value={selectedTime}
-                  onChange={(e) => setSelectedTime(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF5A1F] focus:border-transparent"
-                >
-                  {timeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                {(() => {
+                  const availableOptions = getAvailableTimeOptions(selectedDate);
+
+                  // If no options available for today, show message
+                  if (selectedDate && availableOptions.length === 0) {
+                    return (
+                      <div className="px-3 py-2 text-sm text-gray-500 bg-gray-50 rounded-lg">
+                        No available times remaining today. Please select a future date.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <select
+                      value={selectedTime}
+                      onChange={(e) => setSelectedTime(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF5A1F] focus:border-transparent"
+                    >
+                      {availableOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
               </div>
 
               <div>
