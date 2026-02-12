@@ -42,6 +42,30 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse
   }
 
+  // Allow account-blocked page through regardless of auth state
+  if (request.nextUrl.pathname.startsWith('/auth/account-blocked')) {
+    return supabaseResponse
+  }
+
+  // Check user account status - block disabled/deleted users
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('status')
+      .eq('auth_user_id', user.id)
+      .single()
+
+    if (profile && profile.status !== 'active') {
+      // Sign out non-active users
+      await supabase.auth.signOut()
+
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/account-blocked'
+      url.searchParams.set('reason', profile.status)
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Protected routes that require authentication
   const isProtectedRoute =
     request.nextUrl.pathname.startsWith('/dashboard') ||

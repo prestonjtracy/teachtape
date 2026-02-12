@@ -51,17 +51,21 @@ export async function GET(
       .filter(r => r.athlete_id)
       .map(r => r.athlete_id);
 
-    let athleteNames = new Map<string, string>();
+    let athleteNames = new Map<string, string | null>();
     if (athleteIds.length > 0) {
       const { data: athletes, error: athletesError } = await supabase
         .from('profiles')
-        .select('id, full_name')
+        .select('id, full_name, status')
         .in('id', athleteIds);
 
       if (athletesError) {
         console.warn('⚠️ [GET /api/reviews] Failed to fetch athlete names:', athletesError.message);
       } else {
-        athleteNames = new Map((athletes || []).map(a => [a.id, a.full_name]));
+        // Return "Former User" for deleted accounts
+        athleteNames = new Map((athletes || []).map(a => [
+          a.id,
+          a.status === 'deleted' ? 'Former User' : a.full_name
+        ]));
       }
     }
 

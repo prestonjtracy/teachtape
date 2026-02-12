@@ -39,6 +39,11 @@ export default function ProfileClient({ profile, coach }: ProfileClientProps) {
     type: 'success'
   });
 
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+
   // Check onboarding status from URL params
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -136,6 +141,35 @@ export default function ProfileClient({ profile, coach }: ProfileClientProps) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleDeleteAccount() {
+    if (confirmText !== 'DELETE') return;
+
+    setDeleteLoading(true);
+    try {
+      const response = await fetch('/api/user/delete', { method: 'POST' });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete account');
+      }
+
+      // Redirect to login page with success message
+      window.location.href = '/auth/login?message=Account+deleted+successfully';
+    } catch (error: any) {
+      setToast({
+        show: true,
+        message: error.message || 'Failed to delete account',
+        type: 'error'
+      });
+      setDeleteLoading(false);
+    }
+  }
+
+  function closeDeleteModal() {
+    setShowDeleteModal(false);
+    setConfirmText('');
   }
 
   if (!profile) {
@@ -263,10 +297,10 @@ export default function ProfileClient({ profile, coach }: ProfileClientProps) {
       )}
 
       {/* Quick Links */}
-      <div style={{ 
-        padding: 24, 
-        backgroundColor: '#f8f9fa', 
-        borderRadius: 8 
+      <div style={{
+        padding: 24,
+        backgroundColor: '#f8f9fa',
+        borderRadius: 8
       }}>
         <h2>Quick Links</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -275,6 +309,147 @@ export default function ProfileClient({ profile, coach }: ProfileClientProps) {
           <a href="/dashboard" style={{ color: '#007bff' }}>→ Back to Dashboard</a>
         </div>
       </div>
+
+      {/* Danger Zone - Delete Account */}
+      {profile.role !== 'admin' && (
+        <div style={{
+          marginTop: 32,
+          padding: 24,
+          backgroundColor: '#fef2f2',
+          borderRadius: 8,
+          border: '1px solid #fecaca'
+        }}>
+          <h2 style={{ color: '#991b1b', marginBottom: 8 }}>Danger Zone</h2>
+          <p style={{ color: '#7f1d1d', marginBottom: 16, fontSize: 14 }}>
+            Once you delete your account, there is no going back. Your profile will be deactivated
+            and you will no longer be able to access your account. Your reviews will show as
+            &quot;Former User&quot;.
+          </p>
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#dc2626',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontWeight: 500
+            }}
+          >
+            Delete My Account
+          </button>
+        </div>
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          zIndex: 50
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: 12,
+            maxWidth: 400,
+            width: '100%',
+            padding: 24
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 600, color: '#dc2626' }}>Delete Account</h3>
+              <button
+                onClick={closeDeleteModal}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280' }}
+              >
+                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div style={{
+              padding: 12,
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: 8,
+              marginBottom: 16
+            }}>
+              <p style={{ color: '#991b1b', fontSize: 14, fontWeight: 500, marginBottom: 8 }}>
+                Warning: This action cannot be undone
+              </p>
+              <ul style={{ color: '#7f1d1d', fontSize: 13, paddingLeft: 20, margin: 0 }}>
+                <li>Your account will be permanently deactivated</li>
+                <li>You will not be able to log in</li>
+                <li>Your reviews will display &quot;Former User&quot;</li>
+                <li>Your data will be retained for record-keeping</li>
+              </ul>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 8, color: '#374151' }}>
+                Type <span style={{ fontWeight: 700 }}>DELETE</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="Type DELETE"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  boxSizing: 'border-box'
+                }}
+                disabled={deleteLoading}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={closeDeleteModal}
+                disabled={deleteLoading}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: deleteLoading ? 'not-allowed' : 'pointer',
+                  fontWeight: 500
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading || confirmText !== 'DELETE'}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  backgroundColor: confirmText === 'DELETE' ? '#dc2626' : '#f87171',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: (deleteLoading || confirmText !== 'DELETE') ? 'not-allowed' : 'pointer',
+                  fontWeight: 500,
+                  opacity: (deleteLoading || confirmText !== 'DELETE') ? 0.6 : 1
+                }}
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Toast 
         show={toast.show}

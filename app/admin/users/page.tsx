@@ -15,6 +15,7 @@ export default async function UsersPage() {
       auth_user_id,
       full_name,
       role,
+      status,
       created_at
     `)
     .order('created_at', { ascending: false })
@@ -27,6 +28,7 @@ export default async function UsersPage() {
     const authUser = authData?.users.find(au => au.id === profile.auth_user_id)
     return {
       ...profile,
+      status: profile.status || 'active',
       email: authUser?.email || 'N/A',
       last_sign_in_at: authUser?.last_sign_in_at || null,
       email_confirmed_at: authUser?.email_confirmed_at || null

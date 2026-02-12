@@ -116,9 +116,10 @@ export default function CoachReviews({ coachId, coachName }: CoachReviewsProps) 
     return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
-  // Get athlete first name only
+  // Get athlete first name only (or return "Former User" for deleted accounts)
   const getFirstName = (fullName: string | null) => {
     if (!fullName) return 'Anonymous';
+    if (fullName === 'Former User') return 'Former User';
     return fullName.split(' ')[0];
   };
 

@@ -77,6 +77,154 @@ export async function POST(request: NextRequest) {
         })
         break
 
+      case 'disable':
+        // SECURITY: Prevent admin from disabling themselves
+        if (userId === user.id) {
+          return NextResponse.json(
+            { error: 'Cannot disable your own account' },
+            { status: 403 }
+          )
+        }
+
+        // SECURITY: Prevent disabling other admins
+        const { data: disableTargetProfile } = await supabase
+          .from('profiles')
+          .select('role, status')
+          .eq('auth_user_id', userId)
+          .single()
+
+        if (disableTargetProfile?.role === 'admin') {
+          return NextResponse.json(
+            { error: 'Cannot disable admin accounts' },
+            { status: 403 }
+          )
+        }
+
+        // Get user info for audit log
+        const { data: disableTargetUser } = await adminSupabase.auth.admin.getUserById(userId)
+
+        // Disable the user
+        const { error: disableError } = await supabase
+          .from('profiles')
+          .update({ status: 'disabled' })
+          .eq('auth_user_id', userId)
+
+        if (disableError) {
+          console.error('Error disabling user:', disableError)
+          return NextResponse.json({ error: 'Failed to disable user' }, { status: 500 })
+        }
+
+        // Log the action
+        await logAdminAction(user.id, {
+          action: AuditActions.USER_SUSPENDED,
+          targetType: 'user',
+          targetId: userId,
+          targetIdentifier: disableTargetUser?.user?.email || 'Unknown User',
+          details: {
+            previous_status: disableTargetProfile?.status || 'active',
+            new_status: 'disabled'
+          }
+        })
+        break
+
+      case 'enable':
+        // SECURITY: Prevent admin from enabling themselves
+        if (userId === user.id) {
+          return NextResponse.json(
+            { error: 'Cannot enable your own account' },
+            { status: 403 }
+          )
+        }
+
+        // Get current status for audit log
+        const { data: enableTargetProfile } = await supabase
+          .from('profiles')
+          .select('status')
+          .eq('auth_user_id', userId)
+          .single()
+
+        // Get user info for audit log
+        const { data: enableTargetUser } = await adminSupabase.auth.admin.getUserById(userId)
+
+        // Enable the user
+        const { error: enableError } = await supabase
+          .from('profiles')
+          .update({ status: 'active', deleted_at: null })
+          .eq('auth_user_id', userId)
+
+        if (enableError) {
+          console.error('Error enabling user:', enableError)
+          return NextResponse.json({ error: 'Failed to enable user' }, { status: 500 })
+        }
+
+        // Log the action
+        await logAdminAction(user.id, {
+          action: AuditActions.USER_UNSUSPENDED,
+          targetType: 'user',
+          targetId: userId,
+          targetIdentifier: enableTargetUser?.user?.email || 'Unknown User',
+          details: {
+            previous_status: enableTargetProfile?.status || 'disabled',
+            new_status: 'active'
+          }
+        })
+        break
+
+      case 'soft_delete':
+        // SECURITY: Prevent admin from soft deleting themselves
+        if (userId === user.id) {
+          return NextResponse.json(
+            { error: 'Cannot delete your own account' },
+            { status: 403 }
+          )
+        }
+
+        // SECURITY: Prevent soft deletion of other admins
+        const { data: softDeleteTargetProfile } = await supabase
+          .from('profiles')
+          .select('role, status')
+          .eq('auth_user_id', userId)
+          .single()
+
+        if (softDeleteTargetProfile?.role === 'admin') {
+          return NextResponse.json(
+            { error: 'Cannot delete admin accounts' },
+            { status: 403 }
+          )
+        }
+
+        // Get user info for audit log
+        const { data: softDeleteTargetUser } = await adminSupabase.auth.admin.getUserById(userId)
+
+        // Soft delete the user
+        const { error: softDeleteError } = await supabase
+          .from('profiles')
+          .update({
+            status: 'deleted',
+            deleted_at: new Date().toISOString()
+          })
+          .eq('auth_user_id', userId)
+
+        if (softDeleteError) {
+          console.error('Error soft deleting user:', softDeleteError)
+          return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 })
+        }
+
+        // Log the action
+        await logAdminAction(user.id, {
+          action: AuditActions.USER_DELETED,
+          targetType: 'user',
+          targetId: userId,
+          targetIdentifier: softDeleteTargetUser?.user?.email || 'Unknown User',
+          details: {
+            previous_status: softDeleteTargetProfile?.status || 'active',
+            new_status: 'deleted',
+            deleted_at: new Date().toISOString(),
+            soft_delete: true
+          }
+        })
+        break
+
       case 'delete':
         // SECURITY: Prevent admin from deleting themselves
         if (userId === user.id) {

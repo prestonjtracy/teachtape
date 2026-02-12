@@ -9,6 +9,7 @@ interface User {
   full_name: string | null
   email: string
   role: string
+  status: 'active' | 'disabled' | 'deleted'
   created_at: string
   last_sign_in_at: string | null
   email_confirmed_at: string | null
@@ -22,18 +23,31 @@ export default function UsersTable({ initialUsers }: UsersTableProps) {
   const router = useRouter()
   const [users, setUsers] = useState<User[]>(initialUsers)
   const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'disabled' | 'deleted'>('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const itemsPerPage = 10
 
-  // Filter users based on search term
+  // Filter users based on search term and status
   const filteredUsers = useMemo(() => {
-    if (!searchTerm) return users
-    return users.filter(user => 
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  }, [users, searchTerm])
+    let filtered = users
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(user => user.status === statusFilter)
+    }
+
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter(user =>
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.full_name && user.full_name.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+    }
+
+    return filtered
+  }, [users, searchTerm, statusFilter])
 
   // Paginated users
   const paginatedUsers = useMemo(() => {
@@ -77,6 +91,15 @@ export default function UsersTable({ initialUsers }: UsersTableProps) {
     }
   }
 
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800'
+      case 'disabled': return 'bg-yellow-100 text-yellow-800'
+      case 'deleted': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -89,12 +112,12 @@ export default function UsersTable({ initialUsers }: UsersTableProps) {
 
   return (
     <div className="p-6">
-      {/* Search Bar */}
-      <div className="mb-6">
-        <div className="relative">
+      {/* Search Bar and Filters */}
+      <div className="mb-6 flex gap-4">
+        <div className="relative flex-1">
           <input
             type="text"
-            placeholder="Search users by email or role..."
+            placeholder="Search users by email, name, or role..."
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value)
@@ -111,6 +134,19 @@ export default function UsersTable({ initialUsers }: UsersTableProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value as 'all' | 'active' | 'disabled' | 'deleted')
+            setCurrentPage(1)
+          }}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#F25C1F] focus:border-[#F25C1F] outline-none"
+        >
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="disabled">Disabled</option>
+          <option value="deleted">Deleted</option>
+        </select>
       </div>
 
       {/* Table */}
@@ -120,6 +156,7 @@ export default function UsersTable({ initialUsers }: UsersTableProps) {
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="text-left py-3 px-4 font-semibold text-[#123A72]">User</th>
               <th className="text-left py-3 px-4 font-semibold text-[#123A72]">Role</th>
+              <th className="text-left py-3 px-4 font-semibold text-[#123A72]">Status</th>
               <th className="text-left py-3 px-4 font-semibold text-[#123A72]">Created</th>
               <th className="text-left py-3 px-4 font-semibold text-[#123A72]">Last Login</th>
               <th className="text-left py-3 px-4 font-semibold text-[#123A72]">Actions</th>
@@ -137,6 +174,11 @@ export default function UsersTable({ initialUsers }: UsersTableProps) {
                     {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                   </span>
                 </td>
+                <td className="py-3 px-4">
+                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(user.status || 'active')}`}>
+                    {(user.status || 'active').charAt(0).toUpperCase() + (user.status || 'active').slice(1)}
+                  </span>
+                </td>
                 <td className="py-3 px-4 text-sm text-gray-600">
                   {formatDate(user.created_at)}
                 </td>
@@ -144,8 +186,9 @@ export default function UsersTable({ initialUsers }: UsersTableProps) {
                   {user.last_sign_in_at ? formatDate(user.last_sign_in_at) : 'Never'}
                 </td>
                 <td className="py-3 px-4">
-                  <div className="flex space-x-2">
-                    {user.role !== 'coach' && user.role !== 'admin' && (
+                  <div className="flex flex-wrap gap-2">
+                    {/* Promote to Coach - only for active athletes */}
+                    {user.role !== 'coach' && user.role !== 'admin' && user.status === 'active' && (
                       <button
                         onClick={() => handleAction(user.auth_user_id, 'promote')}
                         disabled={loading}
@@ -154,14 +197,37 @@ export default function UsersTable({ initialUsers }: UsersTableProps) {
                         Promote to Coach
                       </button>
                     )}
-                    
-                    {user.role !== 'admin' && (
+
+                    {/* Disable - only for active non-admin users */}
+                    {user.role !== 'admin' && user.status === 'active' && (
                       <button
-                        onClick={() => handleAction(user.auth_user_id, 'delete')}
+                        onClick={() => handleAction(user.auth_user_id, 'disable')}
+                        disabled={loading}
+                        className="px-3 py-1 text-xs font-medium text-yellow-700 bg-yellow-100 rounded hover:bg-yellow-200 transition-colors disabled:opacity-50"
+                      >
+                        Disable
+                      </button>
+                    )}
+
+                    {/* Enable - only for disabled or deleted users */}
+                    {(user.status === 'disabled' || user.status === 'deleted') && (
+                      <button
+                        onClick={() => handleAction(user.auth_user_id, 'enable')}
+                        disabled={loading}
+                        className="px-3 py-1 text-xs font-medium text-green-700 bg-green-100 rounded hover:bg-green-200 transition-colors disabled:opacity-50"
+                      >
+                        Reactivate
+                      </button>
+                    )}
+
+                    {/* Delete - only for non-deleted, non-admin users */}
+                    {user.role !== 'admin' && user.status !== 'deleted' && (
+                      <button
+                        onClick={() => handleAction(user.auth_user_id, 'soft_delete')}
                         disabled={loading}
                         className="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 rounded hover:bg-red-200 transition-colors disabled:opacity-50"
                       >
-                        Delete User
+                        Delete
                       </button>
                     )}
                   </div>
